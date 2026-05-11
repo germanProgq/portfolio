@@ -1,27 +1,96 @@
-import { useRef, useLayoutEffect, useState, useCallback } from 'react'
+import { useRef, useLayoutEffect, useState, useCallback, useEffect } from 'react'
 import { useGSAP } from '@gsap/react'
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
+import { useLenis } from 'lenis/react'
 import { experience } from '../data/content'
 import { useIsMobile } from '../hooks/useIsMobile'
+import { navScrolling } from '../utils/navScrolling'
+
+/* module-level — survives re-mounts, tracks whether the full animation
+   has ever played in this session */
+let impactEverFired = false
 
 const clamp01 = gsap.utils.clamp(0, 1)
 const THREAD_READER_RATIO = 0.68
 const THREAD_DRAW_LEAD = 0.075
 
-/* Build an organic bezier path through measured dot centres */
+const clampValue = (min, max, value) => Math.max(min, Math.min(max, value))
+
+function reflect(cp, pivot) {
+  return [2 * pivot[0] - cp[0], 2 * pivot[1] - cp[1]]
+}
+
+function randomUnit(index, salt = 0) {
+  const x = Math.sin((index + 1) * 127.1 + salt * 311.7) * 43758.5453
+  return x - Math.floor(x)
+}
+
+function randomRange(index, salt, min, max) {
+  return min + (max - min) * randomUnit(index, salt)
+}
+
 function buildPath(pts, cx, totalH) {
   if (!pts.length) return ''
-  const warp = Math.min(cx * 0.08, 48)
+
+  const firstY = pts[0].y
   let d = `M ${cx} 0`
-  d += ` C ${cx + warp} ${pts[0].y * 0.28},${cx - warp} ${pts[0].y * 0.72},${cx} ${pts[0].y}`
+  let prevCP = [cx, firstY * 0.68]
+
+  d += ` C ${cx} ${firstY * 0.28}, ${prevCP[0]} ${prevCP[1]}, ${cx} ${firstY}`
+
+  /* One self-crossing per gap. The seeded variation keeps the knots organic
+     without changing shape on every render or resize. */
   for (let i = 0; i < pts.length - 1; i++) {
-    const a = pts[i], b = pts[i + 1]
-    const h = b.y - a.y
-    const s = i % 2 === 0 ? 1 : -1
-    d += ` C ${cx + s * warp} ${a.y + h * 0.32},${cx - s * warp} ${b.y - h * 0.32},${cx} ${b.y}`
+    const a = pts[i], b = pts[i + 1], h = b.y - a.y
+    const side = randomUnit(i, 1) > 0.5 ? 1 : -1
+    const amp = clampValue(38, 74, h * randomRange(i, 2, 0.11, 0.16))
+    const loopH = clampValue(82, 148, h * randomRange(i, 3, 0.25, 0.36))
+    const crossY = a.y + h * randomRange(i, 4, 0.42, 0.56)
+    const crossing = [cx + side * randomRange(i, 5, -5, 5), crossY]
+    const upperLean = randomRange(i, 6, 0.52, 0.78)
+    const lowerLean = randomRange(i, 7, 0.88, 1.24)
+    const returnLean = randomRange(i, 8, 0.22, 0.46)
+    const exitLean = randomRange(i, 9, 0.08, 0.2)
+
+    const entryC1 = reflect(prevCP, [cx, a.y])
+    const entryC2 = [
+      cx + side * amp * upperLean,
+      crossing[1] - loopH * randomRange(i, 10, 0.24, 0.36),
+    ]
+    d += ` C ${entryC1[0]} ${entryC1[1]}, ${entryC2[0]} ${entryC2[1]}, ${crossing[0]} ${crossing[1]}`
+
+    const loopC1 = reflect(entryC2, crossing)
+    const loopMid = [
+      cx - side * amp * lowerLean,
+      crossing[1] + loopH * randomRange(i, 11, 0.08, 0.22),
+    ]
+    const loopC2 = [
+      cx - side * amp * randomRange(i, 12, 0.95, 1.34),
+      crossing[1] - loopH * randomRange(i, 13, 0.18, 0.34),
+    ]
+    d += ` C ${loopC1[0]} ${loopC1[1]}, ${loopC2[0]} ${loopC2[1]}, ${loopMid[0]} ${loopMid[1]}`
+
+    const returnC1 = reflect(loopC2, loopMid)
+    const returnC2 = [
+      cx - side * amp * returnLean,
+      crossing[1] - loopH * randomRange(i, 14, 0.18, 0.31),
+    ]
+    d += ` C ${returnC1[0]} ${returnC1[1]}, ${returnC2[0]} ${returnC2[1]}, ${crossing[0]} ${crossing[1]}`
+
+    const exitC1 = reflect(returnC2, crossing)
+    const exitC2 = [
+      cx + side * amp * exitLean,
+      b.y - h * randomRange(i, 15, 0.14, 0.24),
+    ]
+    d += ` C ${exitC1[0]} ${exitC1[1]}, ${exitC2[0]} ${exitC2[1]}, ${cx} ${b.y}`
+    prevCP = exitC2
   }
-  d += ` L ${cx} ${totalH}`
+
+  const lastY = pts[pts.length - 1].y
+  const tailC1 = reflect(prevCP, [cx, lastY])
+  d += ` C ${tailC1[0]} ${tailC1[1]}, ${cx} ${lastY + (totalH - lastY) * 0.62}, ${cx} ${totalH}`
+
   return d
 }
 
@@ -32,7 +101,19 @@ function CardContent({ job, i, isLeft }) {
   return (
     <>
       <div style={{ ...cs.top, flexDirection: flip }}>
-        <span style={cs.company}>{job.company}</span>
+        {job.website ? (
+          <a
+            href={job.website}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={cs.companyLink}
+            data-cursor
+          >
+            {job.company}
+          </a>
+        ) : (
+          <span style={cs.company}>{job.company}</span>
+        )}
         <span style={cs.idx}>{String(i + 1).padStart(2, '0')}</span>
       </div>
       <h3 style={{ ...cs.role, textAlign: ta }}>{job.role}</h3>
@@ -54,15 +135,22 @@ function CardContent({ job, i, isLeft }) {
 }
 
 export default function Experience() {
-  const sectionRef = useRef(null)
-  const wrapperRef = useRef(null)
-  const pathRef    = useRef(null)
-  const dotRefs    = useRef([])
-  const ringRefs   = useRef([])
-  const cardRefs   = useRef([])
-  const fracsRef   = useRef([])
-  const isMobile   = useIsMobile()
+  const sectionRef    = useRef(null)
+  const wrapperRef    = useRef(null)
+  const pathRef   = useRef(null)
+  const flashRef  = useRef(null)
+  const borderLineRef = useRef(null)
+  const glowRef       = useRef(null)
+  const lenisRef      = useRef(null)
+  const dotRefs       = useRef([])
+  const ringRefs      = useRef([])
+  const cardRefs      = useRef([])
+  const fracsRef      = useRef([])
+  const isMobile      = useIsMobile()
+  const lenis         = useLenis()
   const [pathD, setPathD] = useState(null)
+
+  useEffect(() => { lenisRef.current = lenis }, [lenis])
 
   const remeasure = useCallback(() => {
     if (isMobile || !wrapperRef.current) return
@@ -104,7 +192,94 @@ export default function Experience() {
       gsap.set(card, { x: i % 2 === 0 ? -70 : 70, opacity: 0 })
     })
 
-    const activated = new Array(experience.length).fill(false)
+    const activated   = new Array(experience.length).fill(false)
+    const impactFired = { current: false }
+
+    /* ── Impact animation: fires once when the last node activates ── */
+    const triggerImpact = () => {
+      if (impactFired.current) return
+      impactFired.current = true
+
+      /* skip entirely when nav is driving the scroll */
+      if (navScrolling.active) return
+
+      /* abbreviated version for repeat visits — just flash the border line */
+      if (impactEverFired) {
+        const borderEl = borderLineRef.current
+        if (borderEl) {
+          gsap.set(borderEl, { scaleX: 0, scaleY: 1, opacity: 1, transformOrigin: 'left center' })
+          gsap.to(borderEl,  { scaleX: 1, duration: 0.45, ease: 'power3.out' })
+          gsap.to(borderEl,  { opacity: 0, duration: 0.35, delay: 0.45 })
+        }
+        return
+      }
+      impactEverFired = true
+
+      const mainPath = pathRef.current
+      const flashEl  = flashRef.current
+      const borderEl = borderLineRef.current
+      const glowEl   = glowRef.current
+      const section  = sectionRef.current
+      if (!mainPath) return
+
+      const l = lenisRef.current
+      if (l) l.stop()
+
+      const tl   = gsap.timeline()
+      const PEAK = 0.55   /* everything converges here */
+
+      /* 1. All dots explode simultaneously */
+      dotRefs.current.forEach((dot, i) => {
+        const ring = ringRefs.current[i]
+        if (!dot || !ring) return
+        tl.to(dot, { scale: 2.4, duration: 0.1, ease: 'power4.out', overwrite: 'auto' }, 0)
+        tl.to(dot, { scale: 1,   duration: 0.25, ease: 'elastic.out(1, 0.4)' },           0.1)
+        tl.fromTo(ring,
+          { scale: 0.3, opacity: 0.9 },
+          { scale: 8,   opacity: 0, duration: 0.55, ease: 'expo.out', overwrite: 'auto' }, 0)
+      })
+
+      /* 2. Thread instantly flashes white then snaps back */
+      tl.to(mainPath, { attr: { strokeWidth: 5, stroke: '#ffffff' }, duration: 0.06 }, 0)
+      tl.to(mainPath, { attr: { strokeWidth: 1.5, stroke: 'var(--accent)' }, duration: 0.4, ease: 'power2.in' }, 0.06)
+
+      /* 3. Section flash */
+      if (flashEl) {
+        tl.to(flashEl, { opacity: 0.1, duration: 0.06 }, 0)
+        tl.to(flashEl, { opacity: 0,   duration: 0.35  }, 0.06)
+      }
+
+      /* 4. Bottom glow blooms and fades */
+      if (glowEl) {
+        tl.to(glowEl, { opacity: 1, duration: 0.18, ease: 'power3.out' }, 0)
+        tl.to(glowEl, { opacity: 0, duration: 0.45, ease: 'power2.in'  }, PEAK)
+      }
+
+      /* 5. Border sweeps and blooms at peak */
+      if (borderEl) {
+        tl.set(borderEl, { scaleX: 0, scaleY: 1, opacity: 1, transformOrigin: 'left center' }, 0)
+        tl.to(borderEl,  { scaleX: 1, duration: 0.35, ease: 'power3.out' }, 0)
+        tl.to(borderEl,  { scaleY: 5, duration: 0.12, ease: 'power2.out' }, PEAK - 0.08)
+        tl.to(borderEl,  { scaleY: 1, opacity: 0, duration: 0.35, ease: 'power2.in' }, PEAK + 0.05)
+      }
+
+      /* 6. Section shadow blooms */
+      if (section) {
+        tl.to(section, { boxShadow: '0 20px 90px -4px rgba(255,92,92,0.5)', duration: 0.2 }, 0)
+        tl.to(section, { boxShadow: 'none', duration: 0.5 }, PEAK)
+      }
+
+      /* 7. Unlock scroll and launch into Projects at peak */
+      tl.call(() => {
+        const lenis  = lenisRef.current
+        const target = document.getElementById('projects')
+        if (lenis) lenis.start()
+        if (!target) return
+        const y = target.getBoundingClientRect().top + window.scrollY
+        if (lenis) lenis.scrollTo(y, { duration: 1.4, easing: t => t < 0.5 ? 2*t*t : -1+(4-2*t)*t })
+        else       window.scrollTo({ top: y, behavior: 'smooth' })
+      }, [], PEAK)
+    }
 
     const updateThread = () => {
       const wrapper = wrapperRef.current
@@ -134,6 +309,11 @@ export default function Experience() {
           )
           gsap.to(card, { x: 0, opacity: 1, duration: 0.48, delay: 0.04, ease: 'power3.out', overwrite: 'auto' })
 
+          /* fire the impact animation when the last node activates */
+          if (i === fracsRef.current.length - 1) {
+            gsap.delayedCall(0.2, triggerImpact)
+          }
+
         } else if (pathProgress < hideBefore && activated[i]) {
           activated[i] = false
           const dot  = dotRefs.current[i]
@@ -141,6 +321,7 @@ export default function Experience() {
           if (!dot || !card) return
           gsap.to(dot,  { scale: 0, opacity: 0, duration: 0.18, overwrite: 'auto' })
           gsap.to(card, { x: i % 2 === 0 ? -70 : 70, opacity: 0, duration: 0.22, overwrite: 'auto' })
+          if (i === fracsRef.current.length - 1) impactFired.current = false
         }
       })
     }
@@ -180,7 +361,7 @@ export default function Experience() {
               </filter>
             </defs>
             {/* faint guide path */}
-            <path d={pathD} stroke="var(--accent)" strokeWidth="1" strokeOpacity="0.08" fill="none" />
+            <path d={pathD} stroke="var(--accent)" strokeWidth="1" strokeOpacity="0.08" fill="none" strokeLinecap="round" strokeLinejoin="round" />
             {/* animated drawn path */}
             <path
               ref={pathRef}
@@ -189,10 +370,18 @@ export default function Experience() {
               strokeWidth="1.5"
               fill="none"
               strokeLinecap="round"
+              strokeLinejoin="round"
               filter="url(#exp-glow)"
             />
           </svg>
         )}
+
+        {/* section-wide flash overlay */}
+        <div ref={flashRef} style={{
+          position: 'absolute', inset: 0,
+          background: 'white', opacity: 0,
+          pointerEvents: 'none', zIndex: 4,
+        }} />
 
         {experience.map((job, i) => {
           const isLeft = i % 2 === 0
@@ -227,6 +416,24 @@ export default function Experience() {
           )
         })}
       </div>
+
+      {/* gradient glow rising from the bottom border at peak */}
+      <div ref={glowRef} style={{
+        position: 'absolute', bottom: 0, left: 0, right: 0,
+        height: '220px',
+        background: 'linear-gradient(to top, rgba(230,50,50,0.55) 0%, rgba(230,50,50,0.12) 60%, transparent 100%)',
+        opacity: 0, pointerEvents: 'none', zIndex: 3,
+      }} />
+
+      {/* border sweep — glowing line that races across when impact fires */}
+      <div ref={borderLineRef} style={{
+        position: 'absolute', bottom: 0, left: 0, right: 0,
+        height: '1px',
+        background: 'var(--accent)',
+        boxShadow: '0 0 14px 3px var(--accent)',
+        opacity: 0, pointerEvents: 'none', zIndex: 5,
+        transform: 'scaleX(0)', transformOrigin: 'left center',
+      }} />
     </section>
   )
 }
@@ -250,7 +457,13 @@ function MobileExperience() {
       {experience.map((job, i) => (
         <div key={i} data-mc style={mob.card}>
           <div style={mob.top}>
-            <span style={mob.company}>{job.company}</span>
+            {job.website ? (
+              <a href={job.website} target="_blank" rel="noopener noreferrer" style={mob.companyLink} data-cursor>
+                {job.company}
+              </a>
+            ) : (
+              <span style={mob.company}>{job.company}</span>
+            )}
             <span style={mob.idx}>{String(i + 1).padStart(2, '0')}</span>
           </div>
           <h3 style={mob.role}>{job.role}</h3>
@@ -294,6 +507,7 @@ const s = {
 const cs = {
   top: { display: 'flex', alignItems: 'baseline', gap: '1rem', marginBottom: '0.75rem' },
   company: { fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'clamp(26px, 3.5vw, 54px)', color: 'var(--accent)', lineHeight: 1, letterSpacing: '-0.02em' },
+  companyLink: { fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'clamp(26px, 3.5vw, 54px)', color: 'var(--accent)', lineHeight: 1, letterSpacing: '-0.02em', textDecoration: 'none', cursor: 'none', borderBottom: '1px solid transparent', transition: 'border-color 0.2s' },
   idx: { fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--muted)' },
   role: { fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 'clamp(14px, 1.4vw, 20px)', color: 'var(--fg)', marginBottom: '0.5rem' },
   meta: { display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '1.5rem' },
@@ -309,6 +523,7 @@ const mob = {
   card: { padding: '2.5rem 6vw', borderBottom: '1px solid var(--border)' },
   top: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem' },
   company: { fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'clamp(26px, 7vw, 48px)', color: 'var(--accent)', lineHeight: 1, letterSpacing: '-0.02em' },
+  companyLink: { fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'clamp(26px, 7vw, 48px)', color: 'var(--accent)', lineHeight: 1, letterSpacing: '-0.02em', textDecoration: 'none', cursor: 'none', borderBottom: '1px solid transparent', transition: 'border-color 0.2s' },
   idx: { fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--muted)', paddingTop: '6px' },
   role: { fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 'clamp(14px, 4vw, 19px)', color: 'var(--fg)', marginBottom: '0.5rem' },
   meta: { display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem' },

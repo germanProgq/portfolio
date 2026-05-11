@@ -4,6 +4,7 @@ import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { useLenis } from 'lenis/react'
 import { person } from '../data/content'
+import { navScrolling } from '../utils/navScrolling'
 
 const DownloadIcon = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -41,6 +42,19 @@ const SOCIALS = [
   { Icon: GithubIcon, title: 'GitHub', href: person.contact.githubUrl },
   { Icon: TwitterIcon, title: 'Twitter', href: person.contact.twitterUrl },
   { Icon: LinkedinIcon, title: 'LinkedIn', href: person.contact.linkedinUrl },
+]
+
+const DESKTOP_ACTIONS = [
+  { Icon: TwitterIcon, title: 'Twitter', href: person.contact.twitterUrl, external: true },
+  { Icon: LinkedinIcon, title: 'LinkedIn', href: person.contact.linkedinUrl, external: true },
+  { Icon: GithubIcon, title: 'GitHub', href: person.contact.githubUrl, external: true },
+  {
+    Icon: DownloadIcon,
+    title: 'Download CV',
+    href: '/CV_Eng.pdf',
+    download: 'German_Vinokurov_CV.pdf',
+    accent: true,
+  },
 ]
 
 export default function Nav({ visible }) {
@@ -113,25 +127,34 @@ export default function Nav({ visible }) {
   }, [menuOpen, lenis])
 
   const scrollTo = (id) => {
-    /* start lenis synchronously before setMenuOpen triggers its useEffect */
     lenis?.start()
     setMenuOpen(false)
     const el = document.getElementById(id)
     if (!el) return
     const targetY = el.getBoundingClientRect().top + window.scrollY - 56
+    navScrolling.active = true
     if (lenis) {
-      lenis.scrollTo(targetY, { duration: 1.2 })
+      lenis.scrollTo(targetY, {
+        duration: 1.2,
+        onComplete: () => { navScrolling.active = false },
+      })
     } else {
       window.scrollTo({ top: targetY, behavior: 'smooth' })
+      setTimeout(() => { navScrolling.active = false }, 1300)
     }
   }
 
   const scrollTop = () => {
     setMenuOpen(false)
+    navScrolling.active = true
     if (lenis) {
-      lenis.scrollTo(0, { duration: 1.2 })
+      lenis.scrollTo(0, {
+        duration: 1.2,
+        onComplete: () => { navScrolling.active = false },
+      })
     } else {
       window.scrollTo({ top: 0, behavior: 'smooth' })
+      setTimeout(() => { navScrolling.active = false }, 1300)
     }
   }
 
@@ -169,16 +192,17 @@ export default function Nav({ visible }) {
 
         {/* Desktop socials */}
         <div style={styles.socials} className="nav-desktop-socials">
-          {SOCIALS.map(({ Icon, title, href }) => (
+          {DESKTOP_ACTIONS.map(({ Icon, title, href, external, download, accent }) => (
             <a
               key={title}
               href={href}
               title={title}
               aria-label={title}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={styles.socialLink}
-              className="social-icon-link"
+              target={external ? '_blank' : undefined}
+              rel={external ? 'noopener noreferrer' : undefined}
+              download={download}
+              style={accent ? styles.downloadLink : styles.socialLink}
+              className={accent ? 'download-icon-link' : 'social-icon-link'}
               data-cursor
             >
               <Icon />
@@ -261,6 +285,14 @@ const navCSS = `
   .nav-item-btn:hover    { color: var(--fg) !important; }
   .social-icon-link      { color: var(--muted); transition: color 0.2s; }
   .social-icon-link:hover { color: var(--accent) !important; }
+  .download-icon-link    { color: var(--accent); transition: color 0.2s, transform 0.2s; }
+  .download-icon-link:hover { color: var(--fg) !important; transform: translateY(1px); }
+  .social-icon-link svg,
+  .download-icon-link svg {
+    display: block;
+    width: 20px;
+    height: 20px;
+  }
   .nav-logo:hover        { color: var(--accent) !important; }
 
   /* desktop: show links/socials; hide hamburger */
@@ -321,17 +353,35 @@ const styles = {
     cursor: 'none',
   },
   socials: {
-    gap: '1.25rem',
+    position: 'absolute',
+    right: '6vw',
+    top: '50%',
+    transform: 'translateY(-50%)',
+    gap: '0.75rem',
     alignItems: 'center',
+    justifyContent: 'flex-end',
     display: 'none',
+    width: 'max-content',
   },
   socialLink: {
     color: 'var(--muted)',
     display: 'flex',
     alignItems: 'center',
-    padding: '8px',
-    margin: '-8px',
+    justifyContent: 'center',
+    width: '32px',
+    height: '32px',
     transition: 'color 0.2s',
+    flexShrink: 0,
+  },
+  downloadLink: {
+    color: 'var(--accent)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '32px',
+    height: '32px',
+    transition: 'color 0.2s, transform 0.2s',
+    flexShrink: 0,
   },
   hamburger: {
     display: 'none',

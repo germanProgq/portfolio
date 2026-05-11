@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, useEffect } from 'react'
 import { useGSAP } from '@gsap/react'
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
@@ -8,22 +8,33 @@ import { STACK_ICONS } from '../utils/stackIcons'
 
 const desktopDurations = [166, 210, 136, 240, 186]
 const mobileDurations  = [220, 280, 180, 320, 248]
-
 const ICON_SIZE = 15
 
+/* ── helpers ── */
+function getTX(el) {
+  return new DOMMatrix(getComputedStyle(el).transform).m41
+}
+
+/* After a drag, calculate animationDelay so the marquee resumes
+   from exactly where the finger/cursor left off.
+   forward:  keyframes 0→-50%  (translateX goes negative)
+   reverse:  keyframes -50%→0  (translateX goes from neg to 0) */
+/* dur passed explicitly so it works even when animationName='none' */
+function syncDelay(inner, isReverse, dur) {
+  const half = inner.scrollWidth / 2
+  const curX = getTX(inner)
+  const pos  = ((-curX % half) + half) % half
+  return -(isReverse ? (1 - pos / half) : (pos / half)) * dur
+}
+
+/* ── sub-components ── */
 function StackItem({ name }) {
   const icon = STACK_ICONS[name]
   return (
     <span style={st.item}>
       {icon && (
-        <svg
-          viewBox="0 0 24 24"
-          width={ICON_SIZE}
-          height={ICON_SIZE}
-          fill="currentColor"
-          style={st.icon}
-          aria-hidden="true"
-        >
+        <svg viewBox="0 0 24 24" width={ICON_SIZE} height={ICON_SIZE}
+          fill="currentColor" style={st.icon} aria-hidden="true">
           <path d={icon.path} />
         </svg>
       )}
@@ -33,12 +44,11 @@ function StackItem({ name }) {
   )
 }
 
-function MarqueeTrack({ row, duration, isReverse, onPause, onResume }) {
-  /* 8 copies per half → seamless loop at any viewport width */
+function MarqueeTrack({ row, duration, isReverse, rowRef, onPause, onResume }) {
   const items = Array(8).fill(row).flat()
-
   return (
     <div
+      ref={rowRef}
       style={st.row}
       onMouseEnter={onPause}
       onMouseLeave={onResume}
@@ -51,7 +61,6 @@ function MarqueeTrack({ row, duration, isReverse, onPause, onResume }) {
           animationDuration: `${duration}s`,
         }}
       >
-        {/* two identical halves for seamless loop */}
         {[0, 1].map(half => (
           <span key={half} style={st.half}>
             {items.map((name, j) => <StackItem key={`${half}-${j}`} name={name} />)}
@@ -62,43 +71,119 @@ function MarqueeTrack({ row, duration, isReverse, onPause, onResume }) {
   )
 }
 
+/* ── main component ── */
 export default function Stack() {
   const sectionRef = useRef(null)
   const headerRef  = useRef(null)
   const rowRefs    = useRef([])
   const isMobile   = useIsMobile()
 
-  useGSAP(
-    () => {
-      gsap.fromTo(
-        headerRef.current.querySelectorAll('[data-char]'),
-        { y: 40, opacity: 0 },
+  /* scroll-in animations */
+  useGSAP(() => {
+    gsap.fromTo(
+      headerRef.current.querySelectorAll('[data-char]'),
+      { y: 40, opacity: 0 },
+      {
+        y: 0, opacity: 1, stagger: 0.04, duration: 0.4, ease: 'power3.out',
+        scrollTrigger: { trigger: sectionRef.current, start: 'top 78%', toggleActions: 'play none none reverse' },
+      }
+    )
+    rowRefs.current.forEach((row, i) => {
+      if (!row) return
+      gsap.fromTo(row,
+        { opacity: 0, x: i % 2 === 0 ? -30 : 30 },
         {
-          y: 0, opacity: 1, stagger: 0.04, duration: 0.4, ease: 'power3.out',
-          scrollTrigger: { trigger: sectionRef.current, start: 'top 78%', toggleActions: 'play none none reverse' },
+          opacity: 1, x: 0, duration: 0.4, delay: i * 0.06, ease: 'power2.out',
+          scrollTrigger: { trigger: sectionRef.current, start: 'top 70%', toggleActions: 'play none none reverse' },
         }
       )
-      rowRefs.current.forEach((row, i) => {
-        if (!row) return
-        gsap.fromTo(row,
-          { opacity: 0, x: i % 2 === 0 ? -30 : 30 },
-          {
-            opacity: 1, x: 0, duration: 0.4, delay: i * 0.06, ease: 'power2.out',
-            scrollTrigger: { trigger: sectionRef.current, start: 'top 70%', toggleActions: 'play none none reverse' },
-          }
-        )
-      })
-    },
-    { scope: sectionRef }
-  )
+    })
+  }, { scope: sectionRef })
 
-  const pause  = (e) => {
+  /* drag-to-scrub — Pointer Events API with setPointerCapture so the drag
+     tracks the cursor/finger even when it leaves the element */
+  useEffect(() => {
+    const cleanups = stackRows.map((_, i) => {
+      const rowEl = rowRefs.current[i]
+      if (!rowEl) return null
+      const inner = rowEl.querySelector('[data-inner]')
+      if (!inner) return null
+      const isRev = i % 2 !== 0
+
+      let startCX = 0, startTX = 0, dur = 0
+      let vel = 0, prevCX = 0, prevT = 0
+
+      const animName = isRev ? 'marqueeReverse' : 'marquee'
+
+      const begin = (clientX) => {
+        rowEl.dataset.dragging = 'true'
+        document.body.style.userSelect = 'none'
+
+        startTX = getTX(inner)
+        startCX = clientX
+        dur     = parseFloat(inner.style.animationDuration) || 1
+        vel = 0; prevCX = clientX; prevT = performance.now()
+
+        /* set transform first, then kill animation — batched in one paint,
+           so the element never flashes to translateX(0) */
+        inner.style.transform     = `translateX(${startTX}px)`
+        inner.style.animationName = 'none'
+      }
+
+      const move = (clientX) => {
+        inner.style.transform = `translateX(${startTX + (clientX - startCX)}px)`
+        const now = performance.now()
+        const dt  = Math.max(now - prevT, 1)
+        vel = ((clientX - prevCX) / dt) * 16
+        prevCX = clientX; prevT = now
+      }
+
+      const end = () => {
+        delete rowEl.dataset.dragging
+        document.body.style.userSelect = ''
+
+        const rawX = getTX(inner) + vel * 12
+        inner.style.transform = `translateX(${rawX}px)`
+
+        /* syncDelay reads rawX from inline transform while animationName='none' */
+        inner.style.animationDelay = `${syncDelay(inner, isRev, dur)}s`
+        inner.style.animationName  = animName   /* restore — overrides inline */
+      }
+
+      const onPD = (e) => {
+        if (e.button !== 0) return        /* left-click / primary touch only */
+        rowEl.setPointerCapture(e.pointerId)   /* all events route here until up */
+        begin(e.clientX)
+      }
+      const onPM = (e) => { if (rowEl.dataset.dragging) move(e.clientX) }
+      const onPU = (e) => { if (rowEl.dataset.dragging) { rowEl.releasePointerCapture(e.pointerId); end() } }
+
+      rowEl.addEventListener('pointerdown',  onPD)
+      rowEl.addEventListener('pointermove',  onPM)
+      rowEl.addEventListener('pointerup',    onPU)
+      rowEl.addEventListener('pointercancel', onPU)
+
+      return () => {
+        rowEl.removeEventListener('pointerdown',  onPD)
+        rowEl.removeEventListener('pointermove',  onPM)
+        rowEl.removeEventListener('pointerup',    onPU)
+        rowEl.removeEventListener('pointercancel', onPU)
+      }
+    })
+
+    return () => cleanups.forEach(c => c?.())
+  }, [])
+
+  /* hover dim/bright (skip if row is being dragged) */
+  const onEnter = (e) => {
+    if (e.currentTarget.dataset.dragging) return
     const inner = e.currentTarget.querySelector('[data-inner]')
     if (!inner) return
     inner.style.animationPlayState = 'paused'
-    gsap.to(inner, { opacity: 0.45, duration: 0.18, overwrite: 'auto' })
+    gsap.to(inner, { opacity: 0.4, duration: 0.18, overwrite: 'auto' })
   }
-  const resume = (e) => {
+  const onLeave = (e) => {
+    if (e.currentTarget.dataset.dragging) return
     const inner = e.currentTarget.querySelector('[data-inner]')
     if (!inner) return
     inner.style.animationPlayState = 'running'
@@ -119,15 +204,15 @@ export default function Stack() {
 
       <div style={st.marqueeWrap}>
         {stackRows.map((row, i) => (
-          <div key={i} ref={el => (rowRefs.current[i] = el)}>
-            <MarqueeTrack
-              row={row}
-              duration={durations[i]}
-              isReverse={i % 2 !== 0}
-              onPause={pause}
-              onResume={resume}
-            />
-          </div>
+          <MarqueeTrack
+            key={i}
+            row={row}
+            duration={durations[i]}
+            isReverse={i % 2 !== 0}
+            rowRef={el => (rowRefs.current[i] = el)}
+            onPause={onEnter}
+            onResume={onLeave}
+          />
         ))}
       </div>
 
@@ -150,7 +235,7 @@ const st = {
     letterSpacing: 0, display: 'block',
   },
   marqueeWrap: { display: 'flex', flexDirection: 'column', padding: '2.5rem 0', gap: '0.6rem' },
-  row: { overflow: 'hidden', whiteSpace: 'nowrap', cursor: 'default' },
+  row: { overflow: 'hidden', whiteSpace: 'nowrap', cursor: 'none', touchAction: 'none' },
   inner: {
     display: 'inline-flex',
     animationTimingFunction: 'linear',
@@ -162,13 +247,9 @@ const st = {
   },
   half: { display: 'inline-flex', alignItems: 'center' },
   item: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: '5px',
-    fontFamily: 'var(--font-mono)',
-    fontSize: 'clamp(12px, 1.2vw, 17px)',
-    color: 'var(--muted)',
-    letterSpacing: '0.05em',
+    display: 'inline-flex', alignItems: 'center', gap: '5px',
+    fontFamily: 'var(--font-mono)', fontSize: 'clamp(12px, 1.2vw, 17px)',
+    color: 'var(--muted)', letterSpacing: '0.05em',
   },
   icon: { flexShrink: 0, display: 'block' },
   name: { display: 'inline' },

@@ -3,6 +3,7 @@ import { useGSAP } from '@gsap/react'
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { person } from '../data/content'
+import WireframeGlobe from './WireframeGlobe'
 
 export default function Contact() {
   const sectionRef = useRef(null)
@@ -91,7 +92,9 @@ export default function Contact() {
 
   return (
     <section id="contact" ref={sectionRef} style={styles.section}>
-      <h2 ref={quoteRef} style={styles.quoteWrap}>
+      <WireframeGlobe />
+
+      <h2 ref={quoteRef} style={{ ...styles.quoteWrap, position: 'relative', zIndex: 1 }}>
         {quoteWords.map((word, i) => (
           <span key={i} data-word style={styles.quoteWord}>
             {word}{i < quoteWords.length - 1 ? ' ' : ''}
@@ -99,9 +102,9 @@ export default function Contact() {
         ))}
       </h2>
 
-      <div style={styles.divider} />
+      <div style={{ ...styles.divider, position: 'relative', zIndex: 1 }} />
 
-      <div ref={linksRef} style={styles.linksRow}>
+      <div ref={linksRef} style={{ ...styles.linksRow, position: 'relative', zIndex: 1 }}>
         {contactLinks.map((link, i) => (
           <span key={i} style={styles.linkWrap}>
             <a
@@ -121,7 +124,7 @@ export default function Contact() {
         ))}
       </div>
 
-      <div style={styles.footer}>
+      <div style={{ ...styles.footer, zIndex: 1 }}>
         <span style={styles.copyright}>© 2026 German Vinokurov</span>
       </div>
 

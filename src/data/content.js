@@ -22,6 +22,7 @@ export const experience = [
   {
     role: 'Full-Stack Developer',
     company: 'Levare',
+    website: null,
     period: 'Jan 2026 – May 2026',
     type: 'Remote',
     bullets: [
@@ -33,6 +34,7 @@ export const experience = [
   {
     role: 'Full-Stack Developer',
     company: 'Ayuniqa',
+    website: 'https://ayuniqa.com',
     period: 'Jun 2025 – Jan 2026',
     type: 'Israel – Hybrid',
     bullets: [
@@ -44,6 +46,7 @@ export const experience = [
   {
     role: 'Software Development Intern',
     company: 'CTR Strategy',
+    website: 'https://ctrstrategy.com',
     period: 'Dec 2024 – Mar 2025',
     type: 'Remote',
     bullets: [
@@ -55,6 +58,7 @@ export const experience = [
   {
     role: 'Automation & Embedded Systems Engineer',
     company: 'AZTPA',
+    website: 'https://aztpa.ru',
     period: 'Jun–Aug 2023; Jun–Aug 2024',
     type: 'Russia',
     bullets: [

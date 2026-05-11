@@ -6,6 +6,7 @@ import { useLenis } from 'lenis/react'
 import Loader from './components/Loader'
 import Cursor from './components/Cursor'
 import Nav from './components/Nav'
+import ParticleField from './components/ParticleField'
 import Hero from './components/Hero'
 import Manifesto from './components/Manifesto'
 import Experience from './components/Experience'
@@ -37,11 +38,12 @@ export default function App() {
 
   return (
     <>
+      <ParticleField />
       <Cursor />
       <Loader onComplete={handleLoaderComplete} />
       <Nav visible={loaded} />
 
-      <main aria-busy={!loaded}>
+      <main aria-busy={!loaded} style={{ position: 'relative', zIndex: 1 }}>
         <Hero active={loaded} />
         <Manifesto />
         <Experience />
