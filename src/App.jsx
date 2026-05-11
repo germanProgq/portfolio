@@ -42,7 +42,7 @@ export default function App() {
       <Nav visible={loaded} />
 
       <main aria-busy={!loaded}>
-        <Hero />
+        <Hero active={loaded} />
         <Manifesto />
         <Experience />
         <Projects />

@@ -13,6 +13,7 @@ function Root() {
   return (
     <ReactLenis
       root
+      autoRaf={false}
       options={{
         lerp: 0.1,
         duration: 1.2,

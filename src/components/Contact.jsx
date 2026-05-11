@@ -42,8 +42,8 @@ export default function Contact() {
           duration: 0.45,
           ease: 'power3.out',
           scrollTrigger: {
-            trigger: linksRef.current,
-            start: 'top 82%',
+            trigger: sectionRef.current,
+            start: 'top 65%',
             toggleActions: 'play none none reverse',
           },
         }

@@ -11,7 +11,7 @@ const SOCIALS = [
   { label: 'Email', href: `mailto:${person.contact.email}` },
 ]
 
-export default function Hero() {
+export default function Hero({ active = false }) {
   const sectionRef = useRef(null)
   const lineRef = useRef(null)
   const roleRef = useRef(null)
@@ -33,6 +33,17 @@ export default function Hero() {
   })
 
   useGSAP(() => {
+    if (!nameRef.current || !lineRef.current || !roleRef.current || !socialsRef.current) return
+
+    if (!active) {
+      gsap.set(nameRef.current, { opacity: 0 })
+      gsap.set(lineRef.current, { scaleX: 0, transformOrigin: 'left center' })
+      gsap.set(roleRef.current, { y: 20, opacity: 0 })
+      gsap.set(socialsRef.current.children, { y: 14, opacity: 0 })
+      gsap.set([metaRef.current, scrollRef.current], { opacity: 0 })
+      return
+    }
+
     const tl = gsap.timeline({ delay: 0.05 })
 
     tl.fromTo(nameRef.current, { opacity: 0 }, {
@@ -59,43 +70,63 @@ export default function Hero() {
         { opacity: 1, duration: 0.4, stagger: 0.08 },
         '-=0.15'
       )
-  }, [])
+  }, { dependencies: [active], revertOnUpdate: true })
 
   /* role cycling */
   useEffect(() => {
+    if (!active) return
+    let timeoutId = null
     const interval = setInterval(() => {
       setRoleVisible(false)
-      setTimeout(() => {
+      timeoutId = setTimeout(() => {
         setRoleIndex((i) => (i + 1) % person.roles.length)
         setRoleVisible(true)
       }, 220)
     }, 2200)
-    return () => clearInterval(interval)
-  }, [])
+    return () => {
+      clearInterval(interval)
+      clearTimeout(timeoutId)
+    }
+  }, [active])
 
   /* scroll hint pulse */
   useGSAP(() => {
-    if (!scrollRef.current) return
+    if (!active || !scrollRef.current) return
     gsap.to(scrollRef.current, {
       y: 6, duration: 0.9, repeat: -1, yoyo: true, ease: 'power1.inOut',
     })
-  }, [])
+  }, { dependencies: [active], revertOnUpdate: true })
 
   return (
     <section id="hero" ref={sectionRef} style={styles.section}>
       <div style={styles.inner}>
-        <h1 ref={nameRef} style={styles.name} aria-label={person.name}>
+        <h1 ref={nameRef} style={styles.name} className="hero-name" aria-label={person.name}>
           {person.name}
         </h1>
         <div ref={lineRef} style={styles.line} />
-        <div ref={roleRef} style={styles.roleWrap}>
-          <span style={{
-            ...styles.role,
-            opacity: roleVisible ? 1 : 0,
-            transform: roleVisible ? 'translateY(0)' : 'translateY(-10px)',
-          }}>
-            {person.roles[roleIndex]}
-          </span>
+        <div style={styles.roleRow} className="hero-role-row">
+          <div ref={roleRef} style={styles.roleWrap} className="hero-role-text">
+            <span style={{
+              ...styles.role,
+              opacity: roleVisible ? 1 : 0,
+              transform: roleVisible ? 'translateY(0)' : 'translateY(-10px)',
+            }}>
+              {person.roles[roleIndex]}
+            </span>
+          </div>
+
+          <a
+            href="/CV_Eng.pdf"
+            download="German_Vinokurov_CV.pdf"
+            style={styles.cvBtn}
+            className="hero-cv-btn"
+            data-cursor
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M12 3v13M7 11l5 5 5-5M4 20h16" />
+            </svg>
+            <span>CV</span>
+          </a>
         </div>
       </div>
 
@@ -149,6 +180,36 @@ const heroCSS = `
   }
   .hero-social:hover::after { width: 100%; }
   .hero-social:hover        { color: var(--fg) !important; }
+  .hero-cv-btn              { display: none !important; }
+  .hero-cv-btn:hover        { background: var(--accent) !important; color: var(--bg) !important; }
+  @media (max-width: 560px) {
+    .hero-name {
+      text-align: center !important;
+      white-space: normal !important;
+      overflow: visible !important;
+      text-overflow: clip !important;
+      overflow-wrap: normal;
+      word-break: normal;
+    }
+  }
+  @media (max-width: 767px) {
+    .hero-role-row {
+      width: 100%;
+      justify-content: space-between !important;
+    }
+    .hero-role-text {
+      min-width: 0;
+      flex: 1;
+    }
+    .hero-role-text span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .hero-cv-btn {
+      display: inline-flex !important;
+    }
+  }
 `
 
 const styles = {
@@ -183,6 +244,11 @@ const styles = {
     height: '1px',
     background: 'var(--accent)',
     transformOrigin: 'left center',
+  },
+  roleRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '1rem',
   },
   roleWrap: {
     overflow: 'hidden',
@@ -224,6 +290,21 @@ const styles = {
   socialArrow: {
     color: 'var(--accent)',
     fontSize: '10px',
+  },
+  cvBtn: {
+    display: 'none',
+    alignItems: 'center',
+    gap: '0.55rem',
+    fontFamily: 'var(--font-mono)',
+    fontSize: '12px',
+    letterSpacing: '0.12em',
+    textTransform: 'uppercase',
+    color: 'var(--accent)',
+    border: '1px solid var(--accent)',
+    padding: '0.55rem 0.8rem',
+    flexShrink: 0,
+    transition: 'background 0.2s, color 0.2s',
+    cursor: 'none',
   },
   meta: {
     position: 'absolute',

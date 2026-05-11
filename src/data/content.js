@@ -73,6 +73,7 @@ export const projects = [
       'Smart-contract system for paying contracts in crypto. Auth, document upload, email delivery, event handling, contract creation, and reporting.',
     tags: ['Smart Contracts', 'Crypto', 'Auth', 'Full-Stack'],
     github: 'https://github.com/germanProgq',
+    website: 'https://dc63.ru',
   },
   {
     number: '02',
@@ -81,6 +82,7 @@ export const projects = [
       'Hackathon: AI for last-mile delivery optimization. Courier routes, order flow, and operational analytics using GNNs, Actor-Critic algorithms, and an attention-based decoder.',
     tags: ['GNNs', 'Reinforcement Learning', 'AI', 'Logistics'],
     github: 'https://github.com/germanProgq',
+    website: 'https://e-cup-ozon.ru',
   },
   {
     number: '03',
@@ -89,6 +91,7 @@ export const projects = [
       'Decentralized chat where clients act as nodes and exchange messages directly without servers. All logic runs on client devices.',
     tags: ['P2P', 'Decentralized', 'WebSocket', 'Node'],
     github: 'https://github.com/germanProgq/p2pchat',
+    website: null,
   },
   {
     number: '04',
@@ -97,20 +100,30 @@ export const projects = [
       'Online marketplace: API, web interfaces, users, listings, orders, and admin panel. Full server-side and client-side implementation.',
     tags: ['Marketplace', 'REST API', 'React', 'Full-Stack'],
     github: 'https://github.com/germanProgq/Gordex',
+    website: null,
+  },
+  {
+    number: '05',
+    name: 'STABLEUNIT',
+    description:
+      'Built the platform website for a DeFi protocol offering USDPro — an overcollateralized stablecoin backed by Liquid Staking Tokens (stETH, LP tokens) with in-wallet yield and DAO governance.',
+    tags: ['DeFi', 'Web3', 'React', 'Frontend'],
+    github: 'https://github.com/germanProgq',
+    website: 'https://stableunit.org',
   },
 ]
 
 export const stackRows = [
-  ['C/C++', 'Rust', 'Python', 'JavaScript', 'SQL'],
-  ['FastAPI', 'React', 'Axum', 'Flask', 'WebAssembly', 'Docker', 'MongoDB'],
-  ['PyTorch', 'OpenCV', 'YOLOv3', 'GNNs', 'PPO', 'Reinforcement Learning'],
-  ['Docker', 'Git', 'WebSocket', 'Redis', 'GraphQL', 'REST API', 'Uvicorn', 'SQLite'],
-  ['PLC Programming', 'Embedded Systems', 'Multi-GPU Training'],
+  ['C/C++', 'JavaScript', 'Python', 'Rust', 'SQL'],
+  ['Axum', 'Docker', 'FastAPI', 'Flask', 'MongoDB', 'React', 'WebAssembly'],
+  ['GNNs', 'OpenCV', 'PPO', 'PyTorch', 'Reinforcement Learning', 'YOLOv3'],
+  ['Git', 'GraphQL', 'Redis', 'REST API', 'SQLite', 'Uvicorn', 'WebSocket'],
+  ['Embedded Systems', 'Multi-GPU Training', 'PLC Programming'],
 ]
 
 export const numbers = [
   { value: 6, label: 'Programming Languages', prefix: '', suffix: '' },
   { value: 200, label: 'Programmers in Russia', prefix: 'TOP ', suffix: '' },
   { value: 4, label: 'Companies', prefix: '', suffix: '+' },
-  { value: 3, label: 'Languages Spoken', prefix: '', suffix: '' },
+  { value: 4, label: 'Years of experience', prefix: '', suffix: '' },
 ]

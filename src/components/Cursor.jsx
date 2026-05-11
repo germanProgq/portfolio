@@ -1,44 +1,72 @@
 import { useEffect, useRef } from 'react'
-import initCursorEngine from '../wasm/cursor_engine.wasm?init'
-
-const fallbackSmoothAxis = (current, target, lerp, snapEpsilon) => {
-  const delta = target - current
-  return Math.abs(delta) < snapEpsilon ? target : current + delta * lerp
-}
 
 export default function Cursor() {
   const cursorRef = useRef(null)
   const pos = useRef({ x: -100, y: -100 })
   const current = useRef({ x: -100, y: -100 })
   const rafRef = useRef(null)
-  const smoothAxisRef = useRef(fallbackSmoothAxis)
+  const isRunningRef = useRef(false)
 
   useEffect(() => {
     if (!window.matchMedia('(pointer: fine)').matches) return
 
-    let cancelled = false
     const cursor = cursorRef.current
     if (!cursor) return
     cursor.style.display = 'block'
     cursor.style.transform = 'translate3d(-200px, -200px, 0) translate(-50%, -50%) scale(1)'
 
-    initCursorEngine()
-      .then((instance) => {
-        if (!cancelled && typeof instance.exports.smooth_axis === 'function') {
-          smoothAxisRef.current = instance.exports.smooth_axis
-        }
-      })
-      .catch(() => {
-        smoothAxisRef.current = fallbackSmoothAxis
-      })
+    const lerp = 0.22
+    const snapEpsilon = 0.1
+
+    const updateCursor = () => {
+      const scale = cursor.dataset.active === 'true' ? 2.2 : 1
+      cursor.style.transform = `translate3d(${current.current.x}px, ${current.current.y}px, 0) translate(-50%, -50%) scale(${scale})`
+    }
+
+    const tick = () => {
+      const dx = pos.current.x - current.current.x
+      const dy = pos.current.y - current.current.y
+
+      current.current.x = Math.abs(dx) < snapEpsilon
+        ? pos.current.x
+        : current.current.x + dx * lerp
+      current.current.y = Math.abs(dy) < snapEpsilon
+        ? pos.current.y
+        : current.current.y + dy * lerp
+
+      updateCursor()
+
+      const isSettled = current.current.x === pos.current.x && current.current.y === pos.current.y
+      if (isSettled) {
+        isRunningRef.current = false
+        rafRef.current = null
+        return
+      }
+
+      rafRef.current = requestAnimationFrame(tick)
+    }
+
+    const startLoop = () => {
+      if (document.hidden || isRunningRef.current) return
+      isRunningRef.current = true
+      rafRef.current = requestAnimationFrame(tick)
+    }
+
+    const stopLoop = () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current)
+      rafRef.current = null
+      isRunningRef.current = false
+    }
 
     const onMouseMove = (e) => {
-      pos.current = { x: e.clientX, y: e.clientY }
+      pos.current.x = e.clientX
+      pos.current.y = e.clientY
+      startLoop()
     }
 
     const setInteractive = (active) => {
       cursor.dataset.active = active ? 'true' : 'false'
-      cursor.style.mixBlendMode = 'difference'
+      startLoop()
     }
 
     const onPointerOver = (e) => {
@@ -49,41 +77,28 @@ export default function Cursor() {
       const fromInteractive = e.target.closest('a, button, [data-cursor]')
       const toInteractive = e.relatedTarget?.closest?.('a, button, [data-cursor]')
       if (fromInteractive && !toInteractive) {
-        cursor.dataset.active = 'false'
-        cursor.style.mixBlendMode = 'normal'
+        setInteractive(false)
       }
     }
 
     const onVisibilityChange = () => {
       if (document.hidden) {
-        cancelAnimationFrame(rafRef.current)
+        stopLoop()
         return
       }
-      rafRef.current = requestAnimationFrame(tick)
+      startLoop()
     }
 
     const onMouseLeaveWindow = () => {
       cursor.dataset.visible = 'false'
       cursor.style.opacity = '0'
+      stopLoop()
     }
 
     const onMouseEnterWindow = () => {
       cursor.dataset.visible = 'true'
       cursor.style.opacity = '1'
-      cursor.style.mixBlendMode = 'normal'
-    }
-
-    const lerp = 0.22
-    const snapEpsilon = 0.1
-
-    const tick = () => {
-      const smoothAxis = smoothAxisRef.current
-      current.current.x = smoothAxis(current.current.x, pos.current.x, lerp, snapEpsilon)
-      current.current.y = smoothAxis(current.current.y, pos.current.y, lerp, snapEpsilon)
-
-      const scale = cursor.dataset.active === 'true' ? 2.2 : 1
-      cursor.style.transform = `translate3d(${current.current.x}px, ${current.current.y}px, 0) translate(-50%, -50%) scale(${scale})`
-      rafRef.current = requestAnimationFrame(tick)
+      startLoop()
     }
 
     window.addEventListener('mousemove', onMouseMove)
@@ -92,17 +107,15 @@ export default function Cursor() {
     document.addEventListener('visibilitychange', onVisibilityChange)
     document.documentElement.addEventListener('mouseleave', onMouseLeaveWindow)
     document.documentElement.addEventListener('mouseenter', onMouseEnterWindow)
-    rafRef.current = requestAnimationFrame(tick)
 
     return () => {
-      cancelled = true
       window.removeEventListener('mousemove', onMouseMove)
       document.removeEventListener('pointerover', onPointerOver)
       document.removeEventListener('pointerout', onPointerOut)
       document.removeEventListener('visibilitychange', onVisibilityChange)
       document.documentElement.removeEventListener('mouseleave', onMouseLeaveWindow)
       document.documentElement.removeEventListener('mouseenter', onMouseEnterWindow)
-      cancelAnimationFrame(rafRef.current)
+      stopLoop()
     }
   }, [])
 
@@ -118,7 +131,7 @@ export default function Cursor() {
         pointerEvents: 'none',
         zIndex: 99999,
         transform: 'translate3d(-200px, -200px, 0) translate(-50%, -50%) scale(1)',
-        transition: 'opacity 0.15s ease, mix-blend-mode 0.15s',
+        transition: 'opacity 0.15s ease',
         display: 'none',
         opacity: 1,
         willChange: 'transform',

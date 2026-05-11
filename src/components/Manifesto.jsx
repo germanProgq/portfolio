@@ -51,10 +51,10 @@ export default function Manifesto() {
         trigger: sectionRef.current,
         start: 'top 10%',
         end: 'bottom 90%',
-        onEnter: () => gsap.to(markerRef.current, { opacity: 0.3, duration: 0.2 }),
-        onLeave: () => gsap.to(markerRef.current, { opacity: 0, duration: 0.2 }),
-        onEnterBack: () => gsap.to(markerRef.current, { opacity: 0.3, duration: 0.2 }),
-        onLeaveBack: () => gsap.to(markerRef.current, { opacity: 0, duration: 0.2 }),
+        onEnter: () => gsap.to(markerRef.current, { opacity: 0.3, duration: 0.2, overwrite: 'auto' }),
+        onLeave: () => gsap.to(markerRef.current, { opacity: 0, duration: 0.2, overwrite: 'auto' }),
+        onEnterBack: () => gsap.to(markerRef.current, { opacity: 0.3, duration: 0.2, overwrite: 'auto' }),
+        onLeaveBack: () => gsap.to(markerRef.current, { opacity: 0, duration: 0.2, overwrite: 'auto' }),
       })
     },
     { scope: sectionRef }
