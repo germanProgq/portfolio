@@ -49,10 +49,12 @@ function CardContent({ project, i }) {
               <GlobeIcon /><span>Website</span>
             </a>
           )}
-          <a href={project.github} target="_blank" rel="noopener noreferrer"
-            style={s.iconLink} className="proj-link" title="View on GitHub" data-cursor>
-            <GithubIcon /><span>GitHub</span>
-          </a>
+          {project.github && (
+            <a href={project.github} target="_blank" rel="noopener noreferrer"
+              style={s.iconLink} className="proj-link" title="View on GitHub" data-cursor>
+              <GithubIcon /><span>GitHub</span>
+            </a>
+          )}
         </div>
       </div>
     </div>

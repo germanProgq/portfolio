@@ -64,6 +64,7 @@ export default function Nav({ visible }) {
   const [active, setActive] = useState('')
   const [scrolled, setScrolled] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [language, setLanguage] = useState('en')
 
   useGSAP(() => {
     if (!navRef.current) return
@@ -208,6 +209,29 @@ export default function Nav({ visible }) {
               <Icon />
             </a>
           ))}
+          <button
+            type="button"
+            aria-label="Language selector"
+            aria-pressed={language === 'ru'}
+            onClick={() => setLanguage((current) => (current === 'en' ? 'ru' : 'en'))}
+            style={styles.languageToggle}
+            className="language-toggle"
+            data-cursor
+          >
+            <span
+              aria-hidden="true"
+              style={{
+                ...styles.languageThumb,
+                transform: language === 'ru' ? 'translateX(38px)' : 'translateX(0)',
+              }}
+            />
+            <span style={{ ...styles.languageOption, color: language === 'en' ? 'var(--bg)' : 'var(--muted)' }}>
+              EN
+            </span>
+            <span style={{ ...styles.languageOption, color: language === 'ru' ? 'var(--bg)' : 'var(--muted)' }}>
+              RU
+            </span>
+          </button>
         </div>
 
         {/* Mobile hamburger */}
@@ -287,6 +311,7 @@ const navCSS = `
   .social-icon-link:hover { color: var(--accent) !important; }
   .download-icon-link    { color: var(--accent); transition: color 0.2s, transform 0.2s; }
   .download-icon-link:hover { color: var(--fg) !important; transform: translateY(1px); }
+  .language-toggle:hover { border-color: var(--accent) !important; }
   .social-icon-link svg,
   .download-icon-link svg {
     display: block;
@@ -354,10 +379,10 @@ const styles = {
   },
   socials: {
     position: 'absolute',
-    right: '6vw',
+    right: '1.5rem',
     top: '50%',
     transform: 'translateY(-50%)',
-    gap: '0.75rem',
+    gap: '0.65rem',
     alignItems: 'center',
     justifyContent: 'flex-end',
     display: 'none',
@@ -382,6 +407,48 @@ const styles = {
     height: '32px',
     transition: 'color 0.2s, transform 0.2s',
     flexShrink: 0,
+  },
+  languageToggle: {
+    position: 'relative',
+    marginLeft: '0.65rem',
+    width: '78px',
+    height: '32px',
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
+    alignItems: 'center',
+    border: '1px solid rgba(255, 92, 92, 0.45)',
+    borderRadius: '999px',
+    padding: '2px',
+    color: 'var(--muted)',
+    cursor: 'none',
+    overflow: 'hidden',
+    transition: 'border-color 0.22s ease, box-shadow 0.22s ease',
+    boxShadow: '0 0 0 rgba(255, 92, 92, 0)',
+    flexShrink: 0,
+  },
+  languageThumb: {
+    position: 'absolute',
+    left: '3px',
+    top: '3px',
+    width: '34px',
+    height: '24px',
+    borderRadius: '999px',
+    background: 'var(--accent)',
+    boxShadow: '0 0 12px rgba(255, 92, 92, 0.35)',
+    transition: 'transform 0.28s cubic-bezier(0.22, 1, 0.36, 1)',
+    zIndex: 0,
+  },
+  languageOption: {
+    position: 'relative',
+    zIndex: 1,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontFamily: 'var(--font-mono)',
+    fontSize: '11px',
+    letterSpacing: '0.08em',
+    lineHeight: 1,
+    transition: 'color 0.22s ease',
   },
   hamburger: {
     display: 'none',

@@ -99,12 +99,12 @@ export const projects = [
   },
   {
     number: '04',
-    name: 'GORDEX',
+    name: 'PROMDESIGN',
     description:
-      'Online marketplace: API, web interfaces, users, listings, orders, and admin panel. Full server-side and client-side implementation.',
-    tags: ['Marketplace', 'REST API', 'React', 'Full-Stack'],
-    github: 'https://github.com/germanProgq/Gordex',
-    website: null,
+      'Promotional platform for a Moscow scientific-practical conference uniting designers, engineers, and academics. Features a design sprint competition, exhibition, professional talks, and networking. Built with Tilda for NUST MISIS, my university.',
+    tags: ['Tilda', 'Web Design', 'Conference', 'University'],
+    github: null,
+    website: 'https://promdesignproject.ru',
   },
   {
     number: '05',
