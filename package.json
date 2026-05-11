@@ -1,0 +1,28 @@
+{
+  "name": "portfolio",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "build:wasm": "cargo build --manifest-path wasm/cursor-engine/Cargo.toml --release --target wasm32-unknown-unknown && mkdir -p src/wasm && cp wasm/cursor-engine/target/wasm32-unknown-unknown/release/cursor_engine.wasm src/wasm/cursor_engine.wasm",
+    "predev": "npm run build:wasm",
+    "dev": "vite",
+    "prebuild": "npm run build:wasm",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "gsap": "^3.12.7",
+    "@gsap/react": "^2.1.2",
+    "lenis": "^1.3.1",
+    "use-scramble": "^2.2.15"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "vite": "^6.3.5",
+    "@fontsource/space-grotesk": "^5.1.1",
+    "@fontsource/jetbrains-mono": "^5.1.0"
+  }
+}

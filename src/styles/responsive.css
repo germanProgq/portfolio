@@ -1,0 +1,56 @@
+/* ── Mobile-first responsive overrides ── */
+
+@media (max-width: 767px) {
+
+  /* Hero */
+  #hero {
+    padding-top: 52px;
+  }
+
+  /* Project panels: compress height on mobile */
+  [data-panel] {
+    min-height: 70svh !important;
+  }
+  [data-panel-inner] {
+    min-height: 70svh !important;
+    padding: 4vh 6vw !important;
+  }
+
+  /* Project footer: stack vertically */
+  [data-panel] .project-footer-inner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  /* Numbers: no overflow */
+  #numbers [data-stat] {
+    padding: 2.5rem 6vw !important;
+  }
+
+  /* Contact: let links stack */
+  #contact .links-row a {
+    font-size: 12px;
+  }
+
+  /* Stack marquee: tighten rows */
+  #stack .marquee-wrap {
+    padding: 1.5rem 0;
+    gap: 0.4rem;
+  }
+}
+
+/* ── Tablet ── */
+@media (min-width: 768px) and (max-width: 1024px) {
+  /* Numbers: 2x2 if narrow */
+}
+
+/* ── Reduced motion: disable all GSAP and CSS animations ── */
+@media (prefers-reduced-motion: reduce) {
+  [data-panel-inner] {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  [data-word] {
+    color: var(--fg) !important;
+  }
+}
