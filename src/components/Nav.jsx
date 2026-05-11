@@ -234,20 +234,47 @@ export default function Nav({ visible }) {
           </button>
         </div>
 
-        {/* Mobile hamburger */}
-        <button
-          onClick={() => setMenuOpen(!menuOpen)}
-          style={styles.hamburger}
-          className="nav-hamburger"
-          aria-label={menuOpen ? 'Close menu' : 'Open menu'}
-          aria-expanded={menuOpen}
-          aria-controls="mobile-navigation"
-          data-cursor
-        >
-          <span style={{ ...styles.bar, transform: menuOpen ? 'rotate(45deg) translate(3px, 3px)' : 'none' }} />
-          <span style={{ ...styles.bar, opacity: menuOpen ? 0 : 1, transform: menuOpen ? 'scaleX(0)' : 'none' }} />
-          <span style={{ ...styles.bar, transform: menuOpen ? 'rotate(-45deg) translate(3px, -3px)' : 'none' }} />
-        </button>
+        {/* Mobile controls */}
+        <div style={styles.mobileControls} className="nav-mobile-controls">
+          <button
+            type="button"
+            aria-label="Language selector"
+            aria-pressed={language === 'ru'}
+            onClick={() => setLanguage((current) => (current === 'en' ? 'ru' : 'en'))}
+            style={{ ...styles.languageToggle, ...styles.mobileLanguageToggle }}
+            className="language-toggle"
+            data-cursor
+          >
+            <span
+              aria-hidden="true"
+              style={{
+                ...styles.languageThumb,
+                ...styles.mobileLanguageThumb,
+                transform: language === 'ru' ? 'translateX(30px)' : 'translateX(0)',
+              }}
+            />
+            <span style={{ ...styles.languageOption, ...styles.mobileLanguageOption, color: language === 'en' ? 'var(--bg)' : 'var(--muted)' }}>
+              EN
+            </span>
+            <span style={{ ...styles.languageOption, ...styles.mobileLanguageOption, color: language === 'ru' ? 'var(--bg)' : 'var(--muted)' }}>
+              RU
+            </span>
+          </button>
+
+          <button
+            onClick={() => setMenuOpen(!menuOpen)}
+            style={styles.hamburger}
+            className="nav-hamburger"
+            aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+            aria-expanded={menuOpen}
+            aria-controls="mobile-navigation"
+            data-cursor
+          >
+            <span style={{ ...styles.bar, transform: menuOpen ? 'rotate(45deg) translate(3px, 3px)' : 'none' }} />
+            <span style={{ ...styles.bar, opacity: menuOpen ? 0 : 1, transform: menuOpen ? 'scaleX(0)' : 'none' }} />
+            <span style={{ ...styles.bar, transform: menuOpen ? 'rotate(-45deg) translate(3px, -3px)' : 'none' }} />
+          </button>
+        </div>
       </nav>
 
       {/* Mobile overlay menu */}
@@ -324,13 +351,14 @@ const navCSS = `
   @media (min-width: 768px) {
     .nav-desktop-items   { display: flex !important; }
     .nav-desktop-socials { display: flex !important; }
-    .nav-hamburger       { display: none !important; }
+    .nav-mobile-controls { display: none !important; }
     .nav-overlay         { display: none !important; }
   }
   /* mobile: hide desktop links; show hamburger */
   @media (max-width: 767px) {
     .nav-desktop-items   { display: none !important; }
     .nav-desktop-socials { display: none !important; }
+    .nav-mobile-controls { display: flex !important; }
     .nav-hamburger       { display: flex !important; }
   }
   /* overlay social icons fill their container */
@@ -449,6 +477,24 @@ const styles = {
     letterSpacing: '0.08em',
     lineHeight: 1,
     transition: 'color 0.22s ease',
+  },
+  mobileControls: {
+    display: 'none',
+    alignItems: 'center',
+    gap: '0.8rem',
+    marginLeft: 'auto',
+  },
+  mobileLanguageToggle: {
+    width: '62px',
+    height: '28px',
+    marginLeft: 0,
+  },
+  mobileLanguageThumb: {
+    width: '26px',
+    height: '20px',
+  },
+  mobileLanguageOption: {
+    fontSize: '10px',
   },
   hamburger: {
     display: 'none',
