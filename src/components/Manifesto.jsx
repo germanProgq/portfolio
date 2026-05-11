@@ -2,16 +2,19 @@ import { useRef } from 'react'
 import { useGSAP } from '@gsap/react'
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
-import { person } from '../data/content'
+import { useLanguage } from '../context/LanguageContext'
 
 export default function Manifesto() {
   const sectionRef = useRef(null)
   const markerRef = useRef(null)
+  const { content } = useLanguage()
+  const { person, ui } = content
 
   const words = person.about.split(' ')
 
   useGSAP(
     () => {
+      if (!sectionRef.current || !markerRef.current) return
       const wordEls = sectionRef.current.querySelectorAll('[data-word]')
 
       wordEls.forEach((word) => {
@@ -57,7 +60,7 @@ export default function Manifesto() {
         onLeaveBack: () => gsap.to(markerRef.current, { opacity: 0, duration: 0.2, overwrite: 'auto' }),
       })
     },
-    { scope: sectionRef }
+    { scope: sectionRef, dependencies: [person.about], revertOnUpdate: true }
   )
 
   return (
@@ -65,12 +68,12 @@ export default function Manifesto() {
       <div ref={markerRef} style={styles.marker} />
 
       <div style={styles.label}>
-        <h2 style={styles.labelText}>ABOUT</h2>
+        <h2 style={styles.labelText} data-i18n>{ui.sections.about}</h2>
       </div>
 
       <p style={styles.text}>
         {words.map((word, i) => (
-          <span key={i} data-word style={styles.word}>
+          <span key={`${word}-${i}`} data-word data-i18n style={styles.word}>
             {word}
             {i < words.length - 1 ? ' ' : ''}
           </span>

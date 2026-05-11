@@ -2,7 +2,7 @@ import { useRef } from 'react'
 import { useGSAP } from '@gsap/react'
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
-import { projects } from '../data/content'
+import { useLanguage } from '../context/LanguageContext'
 import { useIsMobile } from '../hooks/useIsMobile'
 
 const GithubIcon = () => (
@@ -18,7 +18,7 @@ const GlobeIcon = () => (
   </svg>
 )
 
-function CardContent({ project, i }) {
+function CardContent({ project, labels }) {
   const titleHref = project.website || project.github
   return (
     <div style={s.cardInner}>
@@ -26,7 +26,7 @@ function CardContent({ project, i }) {
       <div style={s.titleCol}>
         <span style={s.number}>{project.number}</span>
         <a href={titleHref} target="_blank" rel="noopener noreferrer" style={s.titleLink} data-cursor>
-          <h3 data-text={project.name} style={s.title} className="project-title">
+          <h3 data-text={project.name} style={s.title} className="project-title" data-i18n>
             {project.name}
           </h3>
         </a>
@@ -34,10 +34,10 @@ function CardContent({ project, i }) {
 
       {/* right: description + tags + links */}
       <div style={s.bodyCol}>
-        <p style={s.description}>{project.description}</p>
+        <p style={s.description} data-i18n>{project.description}</p>
         <div style={s.tags}>
           {project.tags.map((tag, j) => (
-            <span key={j} style={s.tag}>
+            <span key={j} style={s.tag} data-i18n>
               {tag}{j < project.tags.length - 1 && <span style={s.tagSep}> /</span>}
             </span>
           ))}
@@ -45,14 +45,14 @@ function CardContent({ project, i }) {
         <div style={s.links}>
           {project.website && (
             <a href={project.website} target="_blank" rel="noopener noreferrer"
-              style={s.iconLink} className="proj-link" title="Visit website" data-cursor>
-              <GlobeIcon /><span>Website</span>
+              style={s.iconLink} className="proj-link" title={labels.website} data-cursor data-i18n>
+              <GlobeIcon /><span>{labels.website}</span>
             </a>
           )}
           {project.github && (
             <a href={project.github} target="_blank" rel="noopener noreferrer"
-              style={s.iconLink} className="proj-link" title="View on GitHub" data-cursor>
-              <GithubIcon /><span>GitHub</span>
+              style={s.iconLink} className="proj-link" title={labels.github} data-cursor data-i18n>
+              <GithubIcon /><span>{labels.github}</span>
             </a>
           )}
         </div>
@@ -66,6 +66,10 @@ export default function Projects() {
   const scrollRef  = useRef(null)
   const cardRefs   = useRef([])
   const isMobile   = useIsMobile()
+  const { content } = useLanguage()
+  const projects = content.projects
+  const sectionTitle = content.ui.sections.projects
+  const labels = content.ui.projectLinks
   const N          = projects.length
 
   useGSAP(() => {
@@ -100,7 +104,7 @@ export default function Projects() {
         })
       },
     })
-  }, { scope: sectionRef, dependencies: [isMobile], revertOnUpdate: true })
+  }, { scope: sectionRef, dependencies: [isMobile, N], revertOnUpdate: true })
 
   /* mobile: per-card ScrollTrigger slide-in */
   useGSAP(() => {
@@ -114,19 +118,19 @@ export default function Projects() {
         }
       )
     })
-  }, { scope: sectionRef, dependencies: [isMobile], revertOnUpdate: true })
+  }, { scope: sectionRef, dependencies: [isMobile, projects], revertOnUpdate: true })
 
   return (
     <section id="projects" ref={sectionRef} style={s.section}>
       <div style={s.header}>
-        <h2 style={s.headerLabel}>PROJECTS</h2>
+        <h2 style={s.headerLabel} data-i18n>{sectionTitle}</h2>
       </div>
 
       {isMobile ? (
         /* ── Mobile: stacked vertical list ── */
-        projects.map((project, i) => (
-          <div key={i} data-mob-panel style={s.mobPanel}>
-            <CardContent project={project} i={i} />
+        projects.map((project) => (
+          <div key={project.number} data-mob-panel style={s.mobPanel}>
+            <CardContent project={project} labels={labels} />
           </div>
         ))
       ) : (
@@ -135,11 +139,11 @@ export default function Projects() {
           <div style={s.stage}>
             {projects.map((project, i) => (
               <div
-                key={i}
+                key={project.number}
                 ref={el => (cardRefs.current[i] = el)}
                 style={{ ...s.card, zIndex: i + 1 }}
               >
-                <CardContent project={project} i={i} />
+                <CardContent project={project} labels={labels} />
               </div>
             ))}
           </div>

@@ -2,15 +2,19 @@ import { useRef } from 'react'
 import { useGSAP } from '@gsap/react'
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
-import { numbers } from '../data/content'
+import { useLanguage } from '../context/LanguageContext'
 import { useIsMobile } from '../hooks/useIsMobile'
 
 export default function Numbers() {
   const sectionRef = useRef(null)
   const isMobile = useIsMobile()
+  const { content } = useLanguage()
+  const numbers = content.numbers
+  const sectionTitle = content.ui.sections.numbers
 
   useGSAP(
     () => {
+      if (!sectionRef.current) return
       const statEls = sectionRef.current.querySelectorAll('[data-stat-value]')
 
       statEls.forEach((el) => {
@@ -59,13 +63,13 @@ export default function Numbers() {
         }
       )
     },
-    { scope: sectionRef }
+    { scope: sectionRef, dependencies: [numbers], revertOnUpdate: true }
   )
 
   return (
     <section id="numbers" ref={sectionRef} style={styles.section}>
       <div style={styles.header}>
-        <h2 style={styles.headerLabel}>BY THE NUMBERS</h2>
+        <h2 style={styles.headerLabel} data-i18n>{sectionTitle}</h2>
       </div>
 
       <div style={{ ...styles.grid, gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)' }}>
@@ -82,10 +86,11 @@ export default function Numbers() {
               data-prefix={item.prefix || ''}
               data-suffix={item.suffix || ''}
               style={styles.value}
+              data-i18n
             >
               {(item.prefix || '') + '0' + (item.suffix || '')}
             </span>
-            <span style={styles.label}>{item.label}</span>
+            <span style={styles.label} data-i18n>{item.label}</span>
           </div>
         ))}
       </div>

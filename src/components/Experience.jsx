@@ -3,7 +3,7 @@ import { useGSAP } from '@gsap/react'
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { useLenis } from 'lenis/react'
-import { experience } from '../data/content'
+import { useLanguage } from '../context/LanguageContext'
 import { useIsMobile } from '../hooks/useIsMobile'
 import { navScrolling } from '../utils/navScrolling'
 
@@ -108,25 +108,26 @@ function CardContent({ job, i, isLeft }) {
             rel="noopener noreferrer"
             style={cs.companyLink}
             data-cursor
+            data-i18n
           >
             {job.company}
           </a>
         ) : (
-          <span style={cs.company}>{job.company}</span>
+        <span style={cs.company} data-i18n>{job.company}</span>
         )}
         <span style={cs.idx}>{String(i + 1).padStart(2, '0')}</span>
       </div>
-      <h3 style={{ ...cs.role, textAlign: ta }}>{job.role}</h3>
+      <h3 style={{ ...cs.role, textAlign: ta }} data-i18n>{job.role}</h3>
       <div style={{ ...cs.meta, flexDirection: flip, justifyContent: align }}>
-        <span style={cs.period}>{job.period}</span>
+        <span style={cs.period} data-i18n>{job.period}</span>
         <span style={cs.metaDot}>·</span>
-        <span style={cs.period}>{job.type}</span>
+        <span style={cs.period} data-i18n>{job.type}</span>
       </div>
       <ul style={{ ...cs.bullets, alignItems: align }}>
         {job.bullets.map((b, j) => (
           <li key={j} style={{ ...cs.bullet, flexDirection: flip }}>
             <span style={cs.dash}>—</span>
-            <span style={cs.bText}>{b}</span>
+            <span style={cs.bText} data-i18n>{b}</span>
           </li>
         ))}
       </ul>
@@ -149,6 +150,9 @@ export default function Experience() {
   const isMobile      = useIsMobile()
   const lenis         = useLenis()
   const [pathD, setPathD] = useState(null)
+  const { content } = useLanguage()
+  const jobs = content.experience
+  const sectionTitle = content.ui.sections.experience
 
   useEffect(() => { lenisRef.current = lenis }, [lenis])
 
@@ -192,7 +196,7 @@ export default function Experience() {
       gsap.set(card, { x: i % 2 === 0 ? -70 : 70, opacity: 0 })
     })
 
-    const activated   = new Array(experience.length).fill(false)
+    const activated   = new Array(jobs.length).fill(false)
     const impactFired = { current: false }
 
     /* ── Impact animation: fires once when the last node activates ── */
@@ -337,15 +341,15 @@ export default function Experience() {
       onUpdate: updateThread,
       onRefresh: updateThread,
     })
-  }, { scope: sectionRef, dependencies: [pathD, isMobile], revertOnUpdate: true })
+  }, { scope: sectionRef, dependencies: [pathD, isMobile, jobs], revertOnUpdate: true })
 
   /* ── Mobile ── */
-  if (isMobile) return <MobileExperience />
+  if (isMobile) return <MobileExperience jobs={jobs} sectionTitle={sectionTitle} />
 
   return (
     <section id="work" ref={sectionRef} style={s.section}>
       <div style={s.header}>
-        <span style={s.headerLabel}>EXPERIENCE</span>
+        <span style={s.headerLabel} data-i18n>{sectionTitle}</span>
       </div>
 
       <div ref={wrapperRef} style={s.wrapper}>
@@ -383,10 +387,10 @@ export default function Experience() {
           pointerEvents: 'none', zIndex: 4,
         }} />
 
-        {experience.map((job, i) => {
+        {jobs.map((job, i) => {
           const isLeft = i % 2 === 0
           return (
-            <div key={i} style={s.entry}>
+            <div key={job.company} style={s.entry}>
               {/* left column */}
               <div style={s.col}>
                 {isLeft && (
@@ -439,7 +443,7 @@ export default function Experience() {
 }
 
 /* ── Mobile version ── */
-function MobileExperience() {
+function MobileExperience({ jobs, sectionTitle }) {
   const ref = useRef(null)
   useGSAP(() => {
     ref.current.querySelectorAll('[data-mc]').forEach(card => {
@@ -449,34 +453,34 @@ function MobileExperience() {
           scrollTrigger: { trigger: card, start: 'top 86%', toggleActions: 'play none none reverse' } }
       )
     })
-  }, { scope: ref })
+  }, { scope: ref, dependencies: [jobs], revertOnUpdate: true })
 
   return (
     <section id="work" ref={ref} style={s.section}>
-      <div style={s.header}><span style={s.headerLabel}>EXPERIENCE</span></div>
-      {experience.map((job, i) => (
-        <div key={i} data-mc style={mob.card}>
+      <div style={s.header}><span style={s.headerLabel} data-i18n>{sectionTitle}</span></div>
+      {jobs.map((job, i) => (
+        <div key={job.company} data-mc style={mob.card}>
           <div style={mob.top}>
             {job.website ? (
-              <a href={job.website} target="_blank" rel="noopener noreferrer" style={mob.companyLink} data-cursor>
+              <a href={job.website} target="_blank" rel="noopener noreferrer" style={mob.companyLink} data-cursor data-i18n>
                 {job.company}
               </a>
             ) : (
-              <span style={mob.company}>{job.company}</span>
+              <span style={mob.company} data-i18n>{job.company}</span>
             )}
             <span style={mob.idx}>{String(i + 1).padStart(2, '0')}</span>
           </div>
-          <h3 style={mob.role}>{job.role}</h3>
+          <h3 style={mob.role} data-i18n>{job.role}</h3>
           <div style={mob.meta}>
-            <span style={mob.period}>{job.period}</span>
+            <span style={mob.period} data-i18n>{job.period}</span>
             <span style={mob.dot}>·</span>
-            <span style={mob.period}>{job.type}</span>
+            <span style={mob.period} data-i18n>{job.type}</span>
           </div>
           <ul style={mob.bullets}>
             {job.bullets.map((b, j) => (
               <li key={j} style={mob.bullet}>
                 <span style={mob.dash}>—</span>
-                <span style={mob.txt}>{b}</span>
+                <span style={mob.txt} data-i18n>{b}</span>
               </li>
             ))}
           </ul>

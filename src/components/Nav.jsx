@@ -3,7 +3,7 @@ import { useGSAP } from '@gsap/react'
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { useLenis } from 'lenis/react'
-import { person } from '../data/content'
+import { useLanguage } from '../context/LanguageContext'
 import { navScrolling } from '../utils/navScrolling'
 
 const DownloadIcon = () => (
@@ -11,14 +11,6 @@ const DownloadIcon = () => (
     <path d="M12 3v13M7 11l5 5 5-5M4 20h16" />
   </svg>
 )
-
-const NAV_ITEMS = [
-  { label: 'ABOUT', id: 'about' },
-  { label: 'WORK', id: 'work' },
-  { label: 'PROJECTS', id: 'projects' },
-  { label: 'STACK', id: 'stack' },
-  { label: 'CONTACT', id: 'contact' },
-]
 
 const GithubIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
@@ -38,33 +30,23 @@ const LinkedinIcon = () => (
   </svg>
 )
 
-const SOCIALS = [
-  { Icon: GithubIcon, title: 'GitHub', href: person.contact.githubUrl },
-  { Icon: TwitterIcon, title: 'Twitter', href: person.contact.twitterUrl },
-  { Icon: LinkedinIcon, title: 'LinkedIn', href: person.contact.linkedinUrl },
-]
-
-const DESKTOP_ACTIONS = [
-  { Icon: TwitterIcon, title: 'Twitter', href: person.contact.twitterUrl, external: true },
-  { Icon: LinkedinIcon, title: 'LinkedIn', href: person.contact.linkedinUrl, external: true },
-  { Icon: GithubIcon, title: 'GitHub', href: person.contact.githubUrl, external: true },
-  {
-    Icon: DownloadIcon,
-    title: 'Download CV',
-    href: '/CV_Eng.pdf',
-    download: 'German_Vinokurov_CV.pdf',
-    accent: true,
-  },
-]
-
 export default function Nav({ visible }) {
-  const navRef = useRef(null)
+  const navRef     = useRef(null)
   const overlayRef = useRef(null)
-  const lenis = useLenis()
-  const [active, setActive] = useState('')
-  const [scrolled, setScrolled] = useState(false)
+  const toggleRef  = useRef(null)
+  const thumbRef   = useRef(null)
+  const lenis      = useLenis()
+  const [active, setActive]     = useState('')
   const [menuOpen, setMenuOpen] = useState(false)
-  const [language, setLanguage] = useState('en')
+
+  const { lang, switchLanguage, content } = useLanguage()
+  const { person, ui } = content
+  const NAV_ITEMS = ui.navItems
+  const SOCIALS = [
+    { Icon: GithubIcon,   title: 'GitHub',   href: person.contact.githubUrl },
+    { Icon: TwitterIcon,  title: 'Twitter',  href: person.contact.twitterUrl },
+    { Icon: LinkedinIcon, title: 'LinkedIn', href: person.contact.linkedinUrl },
+  ]
 
   useGSAP(() => {
     if (!navRef.current) return
@@ -79,7 +61,7 @@ export default function Nav({ visible }) {
   useEffect(() => {
     const st = ScrollTrigger.create({
       start: 'top -60px',
-      onUpdate: (self) => setScrolled(self.progress > 0),
+      onUpdate: (self) => {},
     })
     return () => st.kill()
   }, [])
@@ -98,29 +80,20 @@ export default function Nav({ visible }) {
       })
     }).filter(Boolean)
     return () => triggers.forEach((t) => t.kill())
-  }, [visible])
+  }, [visible, NAV_ITEMS])
 
-  /* lock body scroll when menu open */
   useEffect(() => {
     const el = overlayRef.current
     if (!el) return
-
     gsap.killTweensOf(el)
-
     if (menuOpen) {
       lenis?.stop()
       gsap.set(el, { display: 'flex' })
-      gsap.fromTo(el,
-        { opacity: 0, y: -24 },
-        { opacity: 1, y: 0, duration: 0.35, ease: 'power3.out' }
-      )
+      gsap.fromTo(el, { opacity: 0, y: -24 }, { opacity: 1, y: 0, duration: 0.35, ease: 'power3.out' })
     } else {
       lenis?.start()
       gsap.to(el, {
-        opacity: 0,
-        y: -16,
-        duration: 0.25,
-        ease: 'power2.in',
+        opacity: 0, y: -16, duration: 0.25, ease: 'power2.in',
         onComplete: () => gsap.set(el, { display: 'none', y: 0 }),
       })
     }
@@ -135,10 +108,7 @@ export default function Nav({ visible }) {
     const targetY = el.getBoundingClientRect().top + window.scrollY - 56
     navScrolling.active = true
     if (lenis) {
-      lenis.scrollTo(targetY, {
-        duration: 1.2,
-        onComplete: () => { navScrolling.active = false },
-      })
+      lenis.scrollTo(targetY, { duration: 1.2, onComplete: () => { navScrolling.active = false } })
     } else {
       window.scrollTo({ top: targetY, behavior: 'smooth' })
       setTimeout(() => { navScrolling.active = false }, 1300)
@@ -149,15 +119,40 @@ export default function Nav({ visible }) {
     setMenuOpen(false)
     navScrolling.active = true
     if (lenis) {
-      lenis.scrollTo(0, {
-        duration: 1.2,
-        onComplete: () => { navScrolling.active = false },
-      })
+      lenis.scrollTo(0, { duration: 1.2, onComplete: () => { navScrolling.active = false } })
     } else {
       window.scrollTo({ top: 0, behavior: 'smooth' })
       setTimeout(() => { navScrolling.active = false }, 1300)
     }
   }
+
+  const handleLangToggle = () => {
+    const next = lang === 'en' ? 'ru' : 'en'
+
+    const toggle = toggleRef.current
+    const thumb  = thumbRef.current
+    if (toggle && thumb) {
+      gsap.timeline()
+        .to(thumb,  { scale: 1.4, duration: 0.09, ease: 'power3.out' })
+        .to(thumb,  { scale: 1,   duration: 0.26, ease: 'elastic.out(1,0.45)' })
+      gsap.to(toggle, {
+        boxShadow: '0 0 0 3px rgba(255,92,92,0.5), 0 0 22px 7px rgba(255,92,92,0.22)',
+        duration: 0.1,
+        onComplete() {
+          gsap.to(toggle, { boxShadow: '0 0 0 rgba(255,92,92,0)', duration: 0.45 })
+        },
+      })
+    }
+
+    switchLanguage(next)
+  }
+
+  const DESKTOP_ACTIONS = [
+    { Icon: TwitterIcon,  title: 'Twitter',       href: person.contact.twitterUrl,  external: true },
+    { Icon: LinkedinIcon, title: 'LinkedIn',      href: person.contact.linkedinUrl, external: true },
+    { Icon: GithubIcon,   title: 'GitHub',        href: person.contact.githubUrl,   external: true },
+    { Icon: DownloadIcon, title: ui.downloadCV,   href: ui.cvFile, download: ui.cvFilename, accent: true },
+  ]
 
   return (
     <>
@@ -175,7 +170,6 @@ export default function Nav({ visible }) {
           GV
         </button>
 
-        {/* Desktop links */}
         <div style={styles.items} className="nav-desktop-items">
           {NAV_ITEMS.map(({ label, id }) => (
             <button
@@ -185,13 +179,13 @@ export default function Nav({ visible }) {
               className="nav-item-btn"
               aria-current={active === id ? 'page' : undefined}
               data-cursor
+              data-i18n
             >
               {label}
             </button>
           ))}
         </div>
 
-        {/* Desktop socials */}
         <div style={styles.socials} className="nav-desktop-socials">
           {DESKTOP_ACTIONS.map(({ Icon, title, href, external, download, accent }) => (
             <a
@@ -205,79 +199,49 @@ export default function Nav({ visible }) {
               style={accent ? styles.downloadLink : styles.socialLink}
               className={accent ? 'download-icon-link' : 'social-icon-link'}
               data-cursor
+              data-i18n={accent ? true : undefined}
             >
               <Icon />
             </a>
           ))}
           <button
+            ref={toggleRef}
             type="button"
             aria-label="Language selector"
-            aria-pressed={language === 'ru'}
-            onClick={() => setLanguage((current) => (current === 'en' ? 'ru' : 'en'))}
+            aria-pressed={lang === 'ru'}
+            onClick={handleLangToggle}
             style={styles.languageToggle}
             className="language-toggle"
             data-cursor
           >
             <span
+              ref={thumbRef}
               aria-hidden="true"
               style={{
                 ...styles.languageThumb,
-                transform: language === 'ru' ? 'translateX(38px)' : 'translateX(0)',
+                transform: lang === 'ru' ? 'translateX(38px)' : 'translateX(0)',
               }}
             />
-            <span style={{ ...styles.languageOption, color: language === 'en' ? 'var(--bg)' : 'var(--muted)' }}>
-              EN
-            </span>
-            <span style={{ ...styles.languageOption, color: language === 'ru' ? 'var(--bg)' : 'var(--muted)' }}>
-              RU
-            </span>
+            <span style={{ ...styles.languageOption, color: lang === 'en' ? 'var(--bg)' : 'var(--muted)' }}>EN</span>
+            <span style={{ ...styles.languageOption, color: lang === 'ru' ? 'var(--bg)' : 'var(--muted)' }}>RU</span>
           </button>
         </div>
 
-        {/* Mobile controls */}
-        <div style={styles.mobileControls} className="nav-mobile-controls">
-          <button
-            type="button"
-            aria-label="Language selector"
-            aria-pressed={language === 'ru'}
-            onClick={() => setLanguage((current) => (current === 'en' ? 'ru' : 'en'))}
-            style={{ ...styles.languageToggle, ...styles.mobileLanguageToggle }}
-            className="language-toggle"
-            data-cursor
-          >
-            <span
-              aria-hidden="true"
-              style={{
-                ...styles.languageThumb,
-                ...styles.mobileLanguageThumb,
-                transform: language === 'ru' ? 'translateX(30px)' : 'translateX(0)',
-              }}
-            />
-            <span style={{ ...styles.languageOption, ...styles.mobileLanguageOption, color: language === 'en' ? 'var(--bg)' : 'var(--muted)' }}>
-              EN
-            </span>
-            <span style={{ ...styles.languageOption, ...styles.mobileLanguageOption, color: language === 'ru' ? 'var(--bg)' : 'var(--muted)' }}>
-              RU
-            </span>
-          </button>
-
-          <button
-            onClick={() => setMenuOpen(!menuOpen)}
-            style={styles.hamburger}
-            className="nav-hamburger"
-            aria-label={menuOpen ? 'Close menu' : 'Open menu'}
-            aria-expanded={menuOpen}
-            aria-controls="mobile-navigation"
-            data-cursor
-          >
-            <span style={{ ...styles.bar, transform: menuOpen ? 'rotate(45deg) translate(3px, 3px)' : 'none' }} />
-            <span style={{ ...styles.bar, opacity: menuOpen ? 0 : 1, transform: menuOpen ? 'scaleX(0)' : 'none' }} />
-            <span style={{ ...styles.bar, transform: menuOpen ? 'rotate(-45deg) translate(3px, -3px)' : 'none' }} />
-          </button>
-        </div>
+        <button
+          onClick={() => setMenuOpen(!menuOpen)}
+          style={styles.hamburger}
+          className="nav-hamburger"
+          aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+          aria-expanded={menuOpen}
+          aria-controls="mobile-navigation"
+          data-cursor
+        >
+          <span style={{ ...styles.bar, transform: menuOpen ? 'rotate(45deg) translate(3px, 3px)' : 'none' }} />
+          <span style={{ ...styles.bar, opacity: menuOpen ? 0 : 1, transform: menuOpen ? 'scaleX(0)' : 'none' }} />
+          <span style={{ ...styles.bar, transform: menuOpen ? 'rotate(-45deg) translate(3px, -3px)' : 'none' }} />
+        </button>
       </nav>
 
-      {/* Mobile overlay menu */}
       <div
         id="mobile-navigation"
         ref={overlayRef}
@@ -287,43 +251,34 @@ export default function Nav({ visible }) {
       >
         <div style={styles.overlayItems}>
           {NAV_ITEMS.map(({ label, id }) => (
-            <button
-              key={id}
-              onClick={() => scrollTo(id)}
-              style={styles.overlayItem}
-              data-cursor
-            >
+            <button key={id} onClick={() => scrollTo(id)} style={styles.overlayItem} data-cursor data-i18n>
               {label}
             </button>
           ))}
         </div>
         <div style={styles.overlaySocials}>
           {SOCIALS.map(({ Icon, title, href }) => (
-            <a
-              key={title}
-              href={href}
-              title={title}
-              aria-label={title}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={styles.overlaySocialLink}
-              className="overlay-social-link"
-              data-cursor
-            >
+            <a key={title} href={href} title={title} aria-label={title}
+              target="_blank" rel="noopener noreferrer"
+              style={styles.overlaySocialLink} className="overlay-social-link" data-cursor>
               <Icon />
             </a>
           ))}
         </div>
-
-        <a
-          href="/CV_Eng.pdf"
-          download="German_Vinokurov_CV.pdf"
-          style={styles.overlayCV}
-          className="overlay-cv-btn"
+        <button
+          type="button"
+          onClick={handleLangToggle}
+          style={{ ...styles.languageToggle, marginTop: '2.5rem', marginLeft: 0 }}
+          className="language-toggle"
           data-cursor
         >
+          <span aria-hidden="true" style={{ ...styles.languageThumb, transform: lang === 'ru' ? 'translateX(38px)' : 'translateX(0)' }} />
+          <span style={{ ...styles.languageOption, color: lang === 'en' ? 'var(--bg)' : 'var(--muted)' }}>EN</span>
+          <span style={{ ...styles.languageOption, color: lang === 'ru' ? 'var(--bg)' : 'var(--muted)' }}>RU</span>
+        </button>
+        <a href={ui.cvFile} download={ui.cvFilename} style={styles.overlayCV} className="overlay-cv-btn" data-cursor data-i18n>
           <DownloadIcon />
-          <span>Download CV</span>
+          <span>{ui.downloadCV}</span>
         </a>
       </div>
 
@@ -340,231 +295,89 @@ const navCSS = `
   .download-icon-link:hover { color: var(--fg) !important; transform: translateY(1px); }
   .language-toggle:hover { border-color: var(--accent) !important; }
   .social-icon-link svg,
-  .download-icon-link svg {
-    display: block;
-    width: 20px;
-    height: 20px;
-  }
+  .download-icon-link svg { display: block; width: 20px; height: 20px; }
   .nav-logo:hover        { color: var(--accent) !important; }
 
-  /* desktop: show links/socials; hide hamburger */
   @media (min-width: 768px) {
     .nav-desktop-items   { display: flex !important; }
     .nav-desktop-socials { display: flex !important; }
-    .nav-mobile-controls { display: none !important; }
+    .nav-hamburger       { display: none !important; }
     .nav-overlay         { display: none !important; }
   }
-  /* mobile: hide desktop links; show hamburger */
   @media (max-width: 767px) {
     .nav-desktop-items   { display: none !important; }
     .nav-desktop-socials { display: none !important; }
-    .nav-mobile-controls { display: flex !important; }
     .nav-hamburger       { display: flex !important; }
   }
-  /* overlay social icons fill their container */
-  .nav-overlay .overlay-social-link svg {
-    width: 100%;
-    height: 100%;
-  }
+  .nav-overlay .overlay-social-link svg { width: 100%; height: 100%; }
   .nav-overlay .overlay-social-link:hover { color: var(--accent) !important; }
   .overlay-cv-btn:hover { background: var(--accent) !important; color: var(--bg) !important; }
 `
 
 const styles = {
   nav: {
-    position: 'fixed',
-    top: 0, left: 0, right: 0,
-    height: '52px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: '0 6vw',
-    zIndex: 9000,
+    position: 'fixed', top: 0, left: 0, right: 0, height: '52px',
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+    padding: '0 6vw', zIndex: 9000,
     transition: 'background 0.3s, backdrop-filter 0.3s, border-color 0.3s',
   },
   logo: {
-    fontFamily: 'var(--font-display)',
-    fontWeight: 700,
-    fontSize: '15px',
-    color: 'var(--fg)',
-    letterSpacing: '0.05em',
-    transition: 'color 0.2s',
-    cursor: 'none',
+    fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '15px',
+    color: 'var(--fg)', letterSpacing: '0.05em', transition: 'color 0.2s', cursor: 'none',
   },
-  items: {
-    gap: '2.5rem',
-    position: 'absolute',
-    left: '50%',
-    transform: 'translateX(-50%)',
-    display: 'none',
-  },
-  item: {
-    fontFamily: 'var(--font-mono)',
-    fontSize: '13px',
-    letterSpacing: '0.1em',
-    transition: 'color 0.2s',
-    cursor: 'none',
-  },
+  items: { gap: '2.5rem', position: 'absolute', left: '50%', transform: 'translateX(-50%)', display: 'none' },
+  item: { fontFamily: 'var(--font-mono)', fontSize: '13px', letterSpacing: '0.1em', transition: 'color 0.2s', cursor: 'none' },
   socials: {
-    position: 'absolute',
-    right: '1.5rem',
-    top: '50%',
-    transform: 'translateY(-50%)',
-    gap: '0.65rem',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    display: 'none',
-    width: 'max-content',
+    position: 'absolute', right: '1.5rem', top: '50%', transform: 'translateY(-50%)',
+    gap: '0.65rem', alignItems: 'center', justifyContent: 'flex-end', display: 'none', width: 'max-content',
   },
   socialLink: {
-    color: 'var(--muted)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '32px',
-    height: '32px',
-    transition: 'color 0.2s',
-    flexShrink: 0,
+    color: 'var(--muted)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+    width: '32px', height: '32px', transition: 'color 0.2s', flexShrink: 0,
   },
   downloadLink: {
-    color: 'var(--accent)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '32px',
-    height: '32px',
-    transition: 'color 0.2s, transform 0.2s',
-    flexShrink: 0,
+    color: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+    width: '32px', height: '32px', transition: 'color 0.2s, transform 0.2s', flexShrink: 0,
   },
   languageToggle: {
-    position: 'relative',
-    marginLeft: '0.65rem',
-    width: '78px',
-    height: '32px',
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    alignItems: 'center',
-    border: '1px solid rgba(255, 92, 92, 0.45)',
-    borderRadius: '999px',
-    padding: '2px',
-    color: 'var(--muted)',
-    cursor: 'none',
-    overflow: 'hidden',
-    transition: 'border-color 0.22s ease, box-shadow 0.22s ease',
-    boxShadow: '0 0 0 rgba(255, 92, 92, 0)',
-    flexShrink: 0,
+    position: 'relative', marginLeft: '0.65rem', width: '78px', height: '32px',
+    display: 'grid', gridTemplateColumns: '1fr 1fr', alignItems: 'center',
+    border: '1px solid rgba(255, 92, 92, 0.45)', borderRadius: '999px', padding: '2px',
+    color: 'var(--muted)', cursor: 'none', overflow: 'hidden',
+    transition: 'border-color 0.22s ease, box-shadow 0.22s ease', flexShrink: 0,
   },
   languageThumb: {
-    position: 'absolute',
-    left: '3px',
-    top: '3px',
-    width: '34px',
-    height: '24px',
-    borderRadius: '999px',
-    background: 'var(--accent)',
+    position: 'absolute', left: '3px', top: '3px', width: '34px', height: '24px',
+    borderRadius: '999px', background: 'var(--accent)',
     boxShadow: '0 0 12px rgba(255, 92, 92, 0.35)',
-    transition: 'transform 0.28s cubic-bezier(0.22, 1, 0.36, 1)',
-    zIndex: 0,
+    transition: 'transform 0.28s cubic-bezier(0.22, 1, 0.36, 1)', zIndex: 0,
   },
   languageOption: {
-    position: 'relative',
-    zIndex: 1,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontFamily: 'var(--font-mono)',
-    fontSize: '11px',
-    letterSpacing: '0.08em',
-    lineHeight: 1,
+    position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
+    fontFamily: 'var(--font-mono)', fontSize: '11px', letterSpacing: '0.08em', lineHeight: 1,
     transition: 'color 0.22s ease',
   },
-  mobileControls: {
-    display: 'none',
-    alignItems: 'center',
-    gap: '0.8rem',
-    marginLeft: 'auto',
-  },
-  mobileLanguageToggle: {
-    width: '62px',
-    height: '28px',
-    marginLeft: 0,
-  },
-  mobileLanguageThumb: {
-    width: '26px',
-    height: '20px',
-  },
-  mobileLanguageOption: {
-    fontSize: '10px',
-  },
-  hamburger: {
-    display: 'none',
-    flexDirection: 'column',
-    gap: '4px',
-    padding: '4px',
-    cursor: 'none',
-  },
+  hamburger: { display: 'none', flexDirection: 'column', gap: '4px', padding: '4px', cursor: 'none' },
   bar: {
-    width: '20px',
-    height: '1px',
-    background: 'var(--fg)',
-    display: 'block',
-    transition: 'transform 0.25s ease, opacity 0.2s',
-    transformOrigin: 'center',
+    width: '20px', height: '1px', background: 'var(--fg)', display: 'block',
+    transition: 'transform 0.25s ease, opacity 0.2s', transformOrigin: 'center',
   },
   overlay: {
-    position: 'fixed',
-    inset: 0,
-    background: '#080808',
-    zIndex: 8999,
-    display: 'none',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: '0',
-    willChange: 'transform, opacity',
+    position: 'fixed', inset: 0, background: '#080808', zIndex: 8999,
+    display: 'none', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+    gap: '0', willChange: 'transform, opacity',
   },
-  overlayItems: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: '2rem',
-  },
+  overlayItems: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2rem' },
   overlayItem: {
-    fontFamily: 'var(--font-display)',
-    fontWeight: 700,
-    fontSize: 'clamp(36px, 10vw, 72px)',
-    color: 'var(--muted)',
-    letterSpacing: 0,
-    cursor: 'none',
-    transition: 'color 0.2s',
+    fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'clamp(36px, 10vw, 72px)',
+    color: 'var(--muted)', letterSpacing: 0, cursor: 'none', transition: 'color 0.2s',
   },
-  overlaySocials: {
-    display: 'flex',
-    gap: '2.5rem',
-    marginTop: '4rem',
-    alignItems: 'center',
-  },
-  overlaySocialLink: {
-    color: 'var(--muted)',
-    display: 'flex',
-    alignItems: 'center',
-    transition: 'color 0.2s',
-    width: '36px',
-    height: '36px',
-  },
+  overlaySocials: { display: 'flex', gap: '2.5rem', marginTop: '4rem', alignItems: 'center' },
+  overlaySocialLink: { color: 'var(--muted)', display: 'flex', alignItems: 'center', transition: 'color 0.2s', width: '36px', height: '36px' },
   overlayCV: {
-    marginTop: '3rem',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.6rem',
-    fontFamily: 'var(--font-mono)',
-    fontSize: '12px',
-    letterSpacing: '0.12em',
-    textTransform: 'uppercase',
-    color: 'var(--accent)',
-    border: '1px solid var(--accent)',
-    padding: '0.7rem 1.4rem',
-    transition: 'background 0.2s, color 0.2s',
-    cursor: 'none',
+    marginTop: '3rem', display: 'flex', alignItems: 'center', gap: '0.6rem',
+    fontFamily: 'var(--font-mono)', fontSize: '12px', letterSpacing: '0.12em', textTransform: 'uppercase',
+    color: 'var(--accent)', border: '1px solid var(--accent)', padding: '0.7rem 1.4rem',
+    transition: 'background 0.2s, color 0.2s', cursor: 'none',
   },
 }

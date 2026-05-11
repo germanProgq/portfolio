@@ -2,14 +2,7 @@ import { useRef, useState, useEffect } from 'react'
 import { useGSAP } from '@gsap/react'
 import { gsap } from 'gsap'
 import { useScramble } from 'use-scramble'
-import { person } from '../data/content'
-
-const SOCIALS = [
-  { label: 'GitHub', href: person.contact.githubUrl },
-  { label: 'Twitter', href: person.contact.twitterUrl },
-  { label: 'LinkedIn', href: person.contact.linkedinUrl },
-  { label: 'Email', href: `mailto:${person.contact.email}` },
-]
+import { useLanguage } from '../context/LanguageContext'
 
 export default function Hero({ active = false }) {
   const sectionRef = useRef(null)
@@ -20,6 +13,14 @@ export default function Hero({ active = false }) {
   const socialsRef = useRef(null)
   const [roleIndex, setRoleIndex] = useState(0)
   const [roleVisible, setRoleVisible] = useState(true)
+  const { content } = useLanguage()
+  const { person, ui } = content
+  const socials = [
+    { label: 'GitHub', href: person.contact.githubUrl },
+    { label: 'Twitter', href: person.contact.twitterUrl },
+    { label: 'LinkedIn', href: person.contact.linkedinUrl },
+    { label: 'Email', href: `mailto:${person.contact.email}` },
+  ]
 
   const { ref: nameRef, replay } = useScramble({
     text: person.name,
@@ -72,6 +73,11 @@ export default function Hero({ active = false }) {
       )
   }, { dependencies: [active], revertOnUpdate: true })
 
+  useEffect(() => {
+    setRoleIndex(0)
+    setRoleVisible(true)
+  }, [person.roles])
+
   /* role cycling */
   useEffect(() => {
     if (!active) return
@@ -87,7 +93,7 @@ export default function Hero({ active = false }) {
       clearInterval(interval)
       clearTimeout(timeoutId)
     }
-  }, [active])
+  }, [active, person.roles])
 
   /* scroll hint pulse */
   useGSAP(() => {
@@ -100,7 +106,7 @@ export default function Hero({ active = false }) {
   return (
     <section id="hero" ref={sectionRef} style={styles.section}>
       <div style={styles.inner}>
-        <h1 ref={nameRef} style={styles.name} className="hero-name" aria-label={person.name}>
+        <h1 ref={nameRef} style={styles.name} className="hero-name" aria-label={person.name} data-i18n>
           {person.name}
         </h1>
         <div ref={lineRef} style={styles.line} />
@@ -110,17 +116,18 @@ export default function Hero({ active = false }) {
               ...styles.role,
               opacity: roleVisible ? 1 : 0,
               transform: roleVisible ? 'translateY(0)' : 'translateY(-10px)',
-            }}>
+            }} data-i18n>
               {person.roles[roleIndex]}
             </span>
           </div>
 
           <a
-            href="/CV_Eng.pdf"
-            download="German_Vinokurov_CV.pdf"
+            href={ui.cvFile}
+            download={ui.cvFilename}
             style={styles.cvBtn}
             className="hero-cv-btn"
             data-cursor
+            data-i18n
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M12 3v13M7 11l5 5 5-5M4 20h16" />
@@ -131,7 +138,7 @@ export default function Hero({ active = false }) {
       </div>
 
       <div ref={socialsRef} style={styles.socials}>
-        {SOCIALS.map(({ label, href }) => (
+        {socials.map(({ label, href }) => (
           <a key={label} href={href}
             target={href.startsWith('http') ? '_blank' : undefined}
             rel="noopener noreferrer"
@@ -139,20 +146,20 @@ export default function Hero({ active = false }) {
             className="hero-social"
             data-cursor
           >
-            <span style={styles.socialLabel}>{label}</span>
+            <span style={styles.socialLabel} data-i18n>{label}</span>
             <span style={styles.socialArrow} aria-hidden="true">↗</span>
           </a>
         ))}
       </div>
 
       <div ref={metaRef} style={styles.meta}>
-        <span style={styles.metaText}>{person.contact.location}</span>
+        <span style={styles.metaText} data-i18n>{person.contact.location}</span>
         <span style={styles.metaDot}>·</span>
-        <span style={styles.metaText}>{person.contact.phone}</span>
+        <span style={styles.metaText} data-i18n>{person.contact.phone}</span>
       </div>
 
       <div ref={scrollRef} style={styles.scrollHint}>
-        <span style={styles.scrollText}>scroll ↓</span>
+        <span style={styles.scrollText} data-i18n>{ui.scrollHint}</span>
       </div>
 
       <style>{heroCSS}</style>

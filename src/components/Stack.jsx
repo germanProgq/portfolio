@@ -3,6 +3,7 @@ import { useGSAP } from '@gsap/react'
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { stackRows } from '../data/content'
+import { useLanguage } from '../context/LanguageContext'
 import { useIsMobile } from '../hooks/useIsMobile'
 import { STACK_ICONS } from '../utils/stackIcons'
 
@@ -77,9 +78,12 @@ export default function Stack() {
   const headerRef  = useRef(null)
   const rowRefs    = useRef([])
   const isMobile   = useIsMobile()
+  const { content } = useLanguage()
+  const sectionTitle = content.ui.sections.stack
 
   /* scroll-in animations */
   useGSAP(() => {
+    if (!sectionRef.current || !headerRef.current) return
     gsap.fromTo(
       headerRef.current.querySelectorAll('[data-char]'),
       { y: 40, opacity: 0 },
@@ -98,7 +102,7 @@ export default function Stack() {
         }
       )
     })
-  }, { scope: sectionRef })
+  }, { scope: sectionRef, dependencies: [sectionTitle], revertOnUpdate: true })
 
   /* drag-to-scrub — Pointer Events API with setPointerCapture so the drag
      tracks the cursor/finger even when it leaves the element */
@@ -195,8 +199,8 @@ export default function Stack() {
   return (
     <section id="stack" ref={sectionRef} style={st.section}>
       <div style={st.header}>
-        <h2 ref={headerRef} style={st.headerLabel} aria-label="STACK">
-          {'STACK'.split('').map((ch, i) => (
+        <h2 ref={headerRef} style={st.headerLabel} aria-label={sectionTitle} data-i18n>
+          {sectionTitle.split('').map((ch, i) => (
             <span key={i} data-char aria-hidden="true" style={{ display: 'inline-block' }}>{ch}</span>
           ))}
         </h2>

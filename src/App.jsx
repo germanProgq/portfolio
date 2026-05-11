@@ -3,6 +3,7 @@ import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { useLenis } from 'lenis/react'
 
+import { LanguageProvider } from './context/LanguageContext'
 import Loader from './components/Loader'
 import Cursor from './components/Cursor'
 import Nav from './components/Nav'
@@ -15,7 +16,7 @@ import Stack from './components/Stack'
 import Numbers from './components/Numbers'
 import Contact from './components/Contact'
 
-export default function App() {
+function AppInner() {
   const [loaded, setLoaded] = useState(false)
   const lenis = useLenis()
 
@@ -53,5 +54,13 @@ export default function App() {
         <Contact />
       </main>
     </>
+  )
+}
+
+export default function App() {
+  return (
+    <LanguageProvider>
+      <AppInner />
+    </LanguageProvider>
   )
 }

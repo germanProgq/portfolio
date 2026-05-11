@@ -2,7 +2,7 @@ import { useRef } from 'react'
 import { useGSAP } from '@gsap/react'
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
-import { person } from '../data/content'
+import { useLanguage } from '../context/LanguageContext'
 import WireframeGlobe from './WireframeGlobe'
 
 export default function Contact() {
@@ -10,11 +10,14 @@ export default function Contact() {
   const quoteRef = useRef(null)
   const linksRef = useRef(null)
   const magnetTweens = useRef(new WeakMap())
+  const { content } = useLanguage()
+  const { person, ui } = content
 
   const quoteWords = person.tagline.toUpperCase().split(' ')
 
   useGSAP(
     () => {
+      if (!sectionRef.current || !quoteRef.current || !linksRef.current) return
       const wordEls = quoteRef.current.querySelectorAll('[data-word]')
 
       gsap.fromTo(
@@ -50,7 +53,7 @@ export default function Contact() {
         }
       )
     },
-    { scope: sectionRef }
+    { scope: sectionRef, dependencies: [person.tagline], revertOnUpdate: true }
   )
 
   const getMagnetTweens = (el) => {
@@ -96,7 +99,7 @@ export default function Contact() {
 
       <h2 ref={quoteRef} style={{ ...styles.quoteWrap, position: 'relative', zIndex: 1 }}>
         {quoteWords.map((word, i) => (
-          <span key={i} data-word style={styles.quoteWord}>
+          <span key={`${word}-${i}`} data-word data-i18n style={styles.quoteWord}>
             {word}{i < quoteWords.length - 1 ? ' ' : ''}
           </span>
         ))}
@@ -116,6 +119,7 @@ export default function Contact() {
               data-cursor
               onMouseMove={(e) => handleMouseMove(e, e.currentTarget)}
               onMouseLeave={(e) => handleMouseLeave(e.currentTarget)}
+              data-i18n
             >
               {link.label}
             </a>
@@ -125,7 +129,7 @@ export default function Contact() {
       </div>
 
       <div style={{ ...styles.footer, zIndex: 1 }}>
-        <span style={styles.copyright}>© 2026 German Vinokurov</span>
+        <span style={styles.copyright} data-i18n>{ui.copyright}</span>
       </div>
 
       <style>{contactCSS}</style>
