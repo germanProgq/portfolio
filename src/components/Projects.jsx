@@ -18,8 +18,19 @@ const GlobeIcon = () => (
   </svg>
 )
 
+function splitProjectTitle(name) {
+  if (name.includes(' ')) return [name]
+
+  const suffix = ['DESIGN', 'UNIT'].find((part) => name.endsWith(part) && name.length > part.length)
+  if (!suffix) return [name]
+
+  return [name.slice(0, -suffix.length), suffix]
+}
+
 function CardContent({ project, labels }) {
   const titleHref = project.website || project.github
+  const titleParts = splitProjectTitle(project.name)
+
   return (
     <div style={s.cardInner}>
       {/* left: number + title */}
@@ -27,7 +38,11 @@ function CardContent({ project, labels }) {
         <span data-anim="num" style={s.number}>{project.number}</span>
         <a href={titleHref} target="_blank" rel="noopener noreferrer" style={s.titleLink} data-cursor>
           <h3 data-text={project.name} style={s.title} className="project-title" data-i18n>
-            {project.name}
+            {titleParts.map((part, i) => (
+              <span key={`${part}-${i}`} className="project-title-part">
+                {part}
+              </span>
+            ))}
           </h3>
         </a>
       </div>
@@ -268,7 +283,33 @@ const css = `
   }
   .project-title:hover::before { animation: glitch-top 0.28s steps(1) forwards; }
   .project-title:hover::after  { animation: glitch-bot 0.28s steps(1) .04s forwards; }
+  .project-title-part { display: inline; }
   @media (max-width: 767px) {
+    [data-mob-panel] > div {
+      grid-template-columns: minmax(0, 40%) minmax(0, 1fr) !important;
+      gap: 1rem !important;
+      align-items: start !important;
+    }
+    [data-mob-panel] > div > div:first-child {
+      min-width: 0 !important;
+      max-width: 100% !important;
+    }
+    [data-mob-panel] .project-title {
+      max-width: 100% !important;
+      overflow-wrap: anywhere !important;
+      word-break: break-word !important;
+      font-size: clamp(28px, 9vw, 38px) !important;
+      line-height: 0.95 !important;
+      letter-spacing: 0 !important;
+    }
+    [data-mob-panel] .project-title::before,
+    [data-mob-panel] .project-title::after {
+      overflow-wrap: anywhere !important;
+      word-break: break-word !important;
+    }
+    [data-mob-panel] .project-title-part {
+      display: block;
+    }
     .project-title--glitch::before { animation: glitch-top 0.28s steps(1) forwards; }
     .project-title--glitch::after  { animation: glitch-bot 0.28s steps(1) .04s forwards; }
   }
