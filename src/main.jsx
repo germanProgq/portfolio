@@ -8,6 +8,7 @@ import './styles/responsive.css'
 import App from './App'
 
 gsap.registerPlugin(ScrollTrigger)
+gsap.ticker.lagSmoothing(0)
 
 function Root() {
   return (
@@ -17,7 +18,7 @@ function Root() {
       options={{
         lerp: 0.1,
         duration: 1.2,
-        syncTouch: true,
+        syncTouch: false,
       }}
     >
       <App />

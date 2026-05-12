@@ -77,6 +77,7 @@ export default function Stack() {
   const sectionRef = useRef(null)
   const headerRef  = useRef(null)
   const rowRefs    = useRef([])
+  const stackVisibleRef = useRef(false)
   const isMobile   = useIsMobile()
   const { content } = useLanguage()
   const sectionTitle = content.ui.sections.stack
@@ -103,6 +104,29 @@ export default function Stack() {
       )
     })
   }, { scope: sectionRef, dependencies: [sectionTitle], revertOnUpdate: true })
+
+  useEffect(() => {
+    const section = sectionRef.current
+    if (!section) return
+
+    const setRunning = (running) => {
+      stackVisibleRef.current = running
+      rowRefs.current.forEach(row => {
+        if (!row || row.dataset.dragging) return
+        const inner = row.querySelector('[data-inner]')
+        if (inner) inner.style.animationPlayState = running ? 'running' : 'paused'
+      })
+    }
+
+    setRunning(false)
+    const observer = new IntersectionObserver(
+      ([entry]) => setRunning(entry.isIntersecting),
+      { rootMargin: '15% 0px' }
+    )
+    observer.observe(section)
+
+    return () => observer.disconnect()
+  }, [])
 
   /* drag-to-scrub — Pointer Events API with setPointerCapture so the drag
      tracks the cursor/finger even when it leaves the element */
@@ -152,6 +176,7 @@ export default function Stack() {
         /* syncDelay reads rawX from inline transform while animationName='none' */
         inner.style.animationDelay = `${syncDelay(inner, isRev, dur)}s`
         inner.style.animationName  = animName   /* restore — overrides inline */
+        inner.style.animationPlayState = stackVisibleRef.current ? 'running' : 'paused'
       }
 
       const onPD = (e) => {
@@ -190,7 +215,7 @@ export default function Stack() {
     if (e.currentTarget.dataset.dragging) return
     const inner = e.currentTarget.querySelector('[data-inner]')
     if (!inner) return
-    inner.style.animationPlayState = 'running'
+    inner.style.animationPlayState = stackVisibleRef.current ? 'running' : 'paused'
     gsap.to(inner, { opacity: 1, duration: 0.18, overwrite: 'auto' })
   }
 
@@ -244,6 +269,7 @@ const st = {
     display: 'inline-flex',
     animationTimingFunction: 'linear',
     animationIterationCount: 'infinite',
+    animationPlayState: 'paused',
     transition: 'opacity 0.18s',
     whiteSpace: 'nowrap',
     willChange: 'transform',

@@ -8,6 +8,8 @@ const HOVER_A    = 0.16    /* peak near cursor */
 const MOUSE_R    = 160
 const IDLE_DIM   = 0.38
 const IDLE_DELAY = 2600    /* ms before field dims after last move */
+const FRAME_MS   = 1000 / 30
+const DPR_CAP    = 1.5
 
 function nodeCount() {
   const w = window.innerWidth
@@ -24,18 +26,19 @@ export default function ParticleField() {
 
     const canvas = canvasRef.current
     if (!canvas) return
-    const ctx = canvas.getContext('2d')
+    const ctx = canvas.getContext('2d', { alpha: true, desynchronized: true })
+    if (!ctx) return
 
     /* ── sizing ── */
-    const dpr = Math.min(window.devicePixelRatio || 1, 2)
+    const dpr = Math.min(window.devicePixelRatio || 1, DPR_CAP)
 
     function resize() {
       const W = window.innerWidth, H = window.innerHeight
-      canvas.width  = W * dpr
-      canvas.height = H * dpr
+      canvas.width  = Math.round(W * dpr)
+      canvas.height = Math.round(H * dpr)
       canvas.style.width  = W + 'px'
       canvas.style.height = H + 'px'
-      ctx.scale(dpr, dpr)
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
     }
     resize()
 
@@ -93,9 +96,12 @@ export default function ParticleField() {
 
     /* ── draw loop ── */
     let raf
+    let lastFrame = 0
     const draw = (t) => {
       raf = requestAnimationFrame(draw)
       if (paused) return
+      if (t - lastFrame < FRAME_MS) return
+      lastFrame = t
 
       ctx.clearRect(0, 0, W, H)
       globalMult += (targetMult - globalMult) * 0.022
@@ -169,6 +175,7 @@ export default function ParticleField() {
         pointerEvents: 'none',
         zIndex: 0,
         display: 'block',
+        contain: 'strict',
       }}
     />
   )

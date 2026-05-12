@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from 'react'
+import { useRef, useState, useEffect, useLayoutEffect, useCallback } from 'react'
 import { useGSAP } from '@gsap/react'
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
@@ -32,12 +32,16 @@ const LinkedinIcon = () => (
 
 export default function Nav({ visible }) {
   const navRef     = useRef(null)
+  const logoRef    = useRef(null)
+  const itemsRef   = useRef(null)
+  const socialsRef = useRef(null)
   const overlayRef = useRef(null)
   const toggleRef  = useRef(null)
   const thumbRef   = useRef(null)
   const lenis      = useLenis()
   const [active, setActive]     = useState('')
   const [menuOpen, setMenuOpen] = useState(false)
+  const [compactNav, setCompactNav] = useState(false)
 
   const { lang, switchLanguage, content } = useLanguage()
   const { person, ui } = content
@@ -57,14 +61,6 @@ export default function Nav({ visible }) {
     if (!visible || !navRef.current) return
     gsap.to(navRef.current, { y: 0, opacity: 1, duration: 0.4, ease: 'power3.out', delay: 0.1 })
   }, [visible])
-
-  useEffect(() => {
-    const st = ScrollTrigger.create({
-      start: 'top -60px',
-      onUpdate: (self) => {},
-    })
-    return () => st.kill()
-  }, [])
 
   useEffect(() => {
     if (!visible) return
@@ -154,23 +150,77 @@ export default function Nav({ visible }) {
     { Icon: DownloadIcon, title: ui.downloadCV,   href: ui.cvFile, download: ui.cvFilename, accent: true },
   ]
 
+  const measureNavFit = useCallback(() => {
+    const nav = navRef.current
+    const logo = logoRef.current
+    const items = itemsRef.current
+    const socials = socialsRef.current
+    if (!nav || !logo || !items || !socials) return
+
+    const navRect = nav.getBoundingClientRect()
+    const logoRect = logo.getBoundingClientRect()
+    const itemsRect = items.getBoundingClientRect()
+    const socialsRect = socials.getBoundingClientRect()
+    const minGap = 24
+
+    setCompactNav(
+      navRect.width <= 767 ||
+      logoRect.right + minGap > itemsRect.left ||
+      itemsRect.right + minGap > socialsRect.left
+    )
+  }, [])
+
+  useLayoutEffect(() => {
+    let frame = 0
+    let cancelled = false
+    const requestMeasure = () => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => {
+        if (!cancelled) measureNavFit()
+      })
+    }
+
+    measureNavFit()
+    requestMeasure()
+
+    const observer = typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver(requestMeasure)
+      : null
+    ;[navRef.current, logoRef.current, itemsRef.current, socialsRef.current]
+      .filter(Boolean)
+      .forEach((el) => observer?.observe(el))
+
+    window.addEventListener('resize', requestMeasure)
+    document.fonts?.ready?.then(requestMeasure)
+
+    return () => {
+      cancelled = true
+      cancelAnimationFrame(frame)
+      observer?.disconnect()
+      window.removeEventListener('resize', requestMeasure)
+    }
+  }, [measureNavFit, lang, NAV_ITEMS])
+
+  useEffect(() => {
+    if (!compactNav) setMenuOpen(false)
+  }, [compactNav])
+
   return (
     <>
       <nav
         ref={navRef}
+        className={compactNav ? 'nav-shell nav--compact' : 'nav-shell'}
         style={{
           ...styles.nav,
-          background: 'rgba(8, 8, 8, 0.65)',
-          backdropFilter: 'blur(24px) saturate(180%)',
-          WebkitBackdropFilter: 'blur(24px) saturate(180%)',
+          background: 'rgba(8, 8, 8, 0.94)',
           borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
         }}
       >
-        <button onClick={scrollTop} style={styles.logo} data-cursor className="nav-logo" aria-label="Scroll to top">
+        <button ref={logoRef} onClick={scrollTop} style={styles.logo} data-cursor className="nav-logo" aria-label="Scroll to top">
           GV
         </button>
 
-        <div style={styles.items} className="nav-desktop-items">
+        <div ref={itemsRef} style={styles.items} className="nav-desktop-items">
           {NAV_ITEMS.map(({ label, id }) => (
             <button
               key={id}
@@ -186,7 +236,7 @@ export default function Nav({ visible }) {
           ))}
         </div>
 
-        <div style={styles.socials} className="nav-desktop-socials">
+        <div ref={socialsRef} style={styles.socials} className="nav-desktop-socials">
           {DESKTOP_ACTIONS.map(({ Icon, title, href, external, download, accent }) => (
             <a
               key={title}
@@ -246,7 +296,7 @@ export default function Nav({ visible }) {
         id="mobile-navigation"
         ref={overlayRef}
         style={styles.overlay}
-        className="nav-overlay"
+        className={compactNav ? 'nav-overlay nav-overlay--compact' : 'nav-overlay'}
         aria-hidden={!menuOpen}
       >
         <div style={styles.overlayItems}>
@@ -298,17 +348,23 @@ const navCSS = `
   .download-icon-link svg { display: block; width: 20px; height: 20px; }
   .nav-logo:hover        { color: var(--accent) !important; }
 
-  @media (min-width: 768px) {
-    .nav-desktop-items   { display: flex !important; }
-    .nav-desktop-socials { display: flex !important; }
-    .nav-hamburger       { display: none !important; }
-    .nav-overlay         { display: none !important; }
+  .nav-shell .nav-desktop-items,
+  .nav-shell .nav-desktop-socials {
+    display: flex !important;
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transition: opacity 0.18s ease, visibility 0.18s ease;
   }
-  @media (max-width: 767px) {
-    .nav-desktop-items   { display: none !important; }
-    .nav-desktop-socials { display: none !important; }
-    .nav-hamburger       { display: flex !important; }
+  .nav-shell.nav--compact .nav-desktop-items,
+  .nav-shell.nav--compact .nav-desktop-socials {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
   }
+  .nav-shell .nav-hamburger { display: none !important; }
+  .nav-shell.nav--compact .nav-hamburger { display: flex !important; }
+  .nav-overlay:not(.nav-overlay--compact) { display: none !important; }
   .nav-overlay .overlay-social-link svg { width: 100%; height: 100%; }
   .nav-overlay .overlay-social-link:hover { color: var(--accent) !important; }
   .overlay-cv-btn:hover { background: var(--accent) !important; color: var(--bg) !important; }
@@ -319,7 +375,7 @@ const styles = {
     position: 'fixed', top: 0, left: 0, right: 0, height: '52px',
     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
     padding: '0 6vw', zIndex: 9000,
-    transition: 'background 0.3s, backdrop-filter 0.3s, border-color 0.3s',
+    transition: 'background 0.3s, border-color 0.3s',
   },
   logo: {
     fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '15px',

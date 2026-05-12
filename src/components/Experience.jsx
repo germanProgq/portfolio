@@ -14,6 +14,24 @@ let impactEverFired = false
 const clamp01 = gsap.utils.clamp(0, 1)
 const THREAD_READER_RATIO = 0.68
 const THREAD_DRAW_LEAD = 0.075
+const THREAD_DPR_CAP = 1.5
+const THREAD_PROGRESS_EPSILON = 0.0008
+const PROJECTS_NAV_OFFSET = 52
+const PROJECTS_LAUNCH_DURATION = 0.62
+const IMPACT_DELAY = 0.1
+const IMPACT_PEAK = 0.28
+const REPEAT_LAUNCH_DELAY = 0.11
+const canvasContexts = new WeakMap()
+const scrollLockEventOptions = { capture: true, passive: false }
+const scrollLockKeys = new Set([
+  ' ',
+  'ArrowDown',
+  'ArrowUp',
+  'End',
+  'Home',
+  'PageDown',
+  'PageUp',
+])
 
 const clampValue = (min, max, value) => Math.max(min, Math.min(max, value))
 
@@ -30,14 +48,57 @@ function randomRange(index, salt, min, max) {
   return min + (max - min) * randomUnit(index, salt)
 }
 
-function buildPath(pts, cx, totalH) {
-  if (!pts.length) return ''
+function cubicPoint(curve, t) {
+  const mt = 1 - t
+  const mt2 = mt * mt
+  const t2 = t * t
+  return {
+    x:
+      mt2 * mt * curve.x0 +
+      3 * mt2 * t * curve.c1x +
+      3 * mt * t2 * curve.c2x +
+      t2 * t * curve.x,
+    y:
+      mt2 * mt * curve.y0 +
+      3 * mt2 * t * curve.c1y +
+      3 * mt * t2 * curve.c2y +
+      t2 * t * curve.y,
+  }
+}
+
+function curveBudget(curve) {
+  const chord = Math.hypot(curve.x - curve.x0, curve.y - curve.y0)
+  const controls =
+    Math.hypot(curve.c1x - curve.x0, curve.c1y - curve.y0) +
+    Math.hypot(curve.c2x - curve.c1x, curve.c2y - curve.c1y) +
+    Math.hypot(curve.x - curve.c2x, curve.y - curve.c2y)
+  return clampValue(12, 40, Math.ceil(Math.max(chord, controls) / 18))
+}
+
+function buildThreadGeometry(pts, cx, totalH) {
+  if (!pts.length) return null
+
+  const curves = []
+  let current = { x: cx, y: 0 }
+  const addCurve = (c1, c2, end) => {
+    const curve = {
+      x0: current.x,
+      y0: current.y,
+      c1x: c1[0],
+      c1y: c1[1],
+      c2x: c2[0],
+      c2y: c2[1],
+      x: end[0],
+      y: end[1],
+    }
+    curves.push(curve)
+    current = { x: end[0], y: end[1] }
+  }
 
   const firstY = pts[0].y
-  let d = `M ${cx} 0`
   let prevCP = [cx, firstY * 0.68]
 
-  d += ` C ${cx} ${firstY * 0.28}, ${prevCP[0]} ${prevCP[1]}, ${cx} ${firstY}`
+  addCurve([cx, firstY * 0.28], prevCP, [cx, firstY])
 
   /* One self-crossing per gap. The seeded variation keeps the knots organic
      without changing shape on every render or resize. */
@@ -58,7 +119,7 @@ function buildPath(pts, cx, totalH) {
       cx + side * amp * upperLean,
       crossing[1] - loopH * randomRange(i, 10, 0.24, 0.36),
     ]
-    d += ` C ${entryC1[0]} ${entryC1[1]}, ${entryC2[0]} ${entryC2[1]}, ${crossing[0]} ${crossing[1]}`
+    addCurve(entryC1, entryC2, crossing)
 
     const loopC1 = reflect(entryC2, crossing)
     const loopMid = [
@@ -69,29 +130,161 @@ function buildPath(pts, cx, totalH) {
       cx - side * amp * randomRange(i, 12, 0.95, 1.34),
       crossing[1] - loopH * randomRange(i, 13, 0.18, 0.34),
     ]
-    d += ` C ${loopC1[0]} ${loopC1[1]}, ${loopC2[0]} ${loopC2[1]}, ${loopMid[0]} ${loopMid[1]}`
+    addCurve(loopC1, loopC2, loopMid)
 
     const returnC1 = reflect(loopC2, loopMid)
     const returnC2 = [
       cx - side * amp * returnLean,
       crossing[1] - loopH * randomRange(i, 14, 0.18, 0.31),
     ]
-    d += ` C ${returnC1[0]} ${returnC1[1]}, ${returnC2[0]} ${returnC2[1]}, ${crossing[0]} ${crossing[1]}`
+    addCurve(returnC1, returnC2, crossing)
 
     const exitC1 = reflect(returnC2, crossing)
     const exitC2 = [
       cx + side * amp * exitLean,
       b.y - h * randomRange(i, 15, 0.14, 0.24),
     ]
-    d += ` C ${exitC1[0]} ${exitC1[1]}, ${exitC2[0]} ${exitC2[1]}, ${cx} ${b.y}`
+    addCurve(exitC1, exitC2, [cx, b.y])
     prevCP = exitC2
   }
 
   const lastY = pts[pts.length - 1].y
   const tailC1 = reflect(prevCP, [cx, lastY])
-  d += ` C ${tailC1[0]} ${tailC1[1]}, ${cx} ${lastY + (totalH - lastY) * 0.62}, ${cx} ${totalH}`
+  addCurve(tailC1, [cx, lastY + (totalH - lastY) * 0.62], [cx, totalH])
 
-  return d
+  const points = [{ x: cx, y: 0 }]
+  const lengths = [0]
+  let totalLength = 0
+
+  curves.forEach(curve => {
+    const steps = curveBudget(curve)
+    for (let step = 1; step <= steps; step++) {
+      const point = cubicPoint(curve, step / steps)
+      const prev = points[points.length - 1]
+      totalLength += Math.hypot(point.x - prev.x, point.y - prev.y)
+      points.push(point)
+      lengths.push(totalLength)
+    }
+  })
+
+  return { curves, points, lengths, totalLength, width: cx * 2, height: totalH }
+}
+
+function getAccentColor(el) {
+  if (!el) return '#ff5c5c'
+  return getComputedStyle(el).getPropertyValue('--accent').trim() || '#ff5c5c'
+}
+
+function resizeCanvas(canvas, geometry) {
+  if (!canvas || !geometry) return null
+  const dpr = Math.min(window.devicePixelRatio || 1, THREAD_DPR_CAP)
+  const pixelWidth = Math.max(1, Math.round(geometry.width * dpr))
+  const pixelHeight = Math.max(1, Math.round(geometry.height * dpr))
+
+  if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
+    canvas.width = pixelWidth
+    canvas.height = pixelHeight
+    canvas.style.width = `${geometry.width}px`
+    canvas.style.height = `${geometry.height}px`
+  }
+
+  let ctx = canvasContexts.get(canvas)
+  if (!ctx) {
+    ctx = canvas.getContext('2d', { alpha: true, desynchronized: true })
+    if (!ctx) return null
+    canvasContexts.set(canvas, ctx)
+  }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+  ctx.clearRect(0, 0, geometry.width, geometry.height)
+  return ctx
+}
+
+function strokeCurves(ctx, curves) {
+  if (!curves.length) return
+  ctx.beginPath()
+  ctx.moveTo(curves[0].x0, curves[0].y0)
+  curves.forEach(curve => {
+    ctx.bezierCurveTo(curve.c1x, curve.c1y, curve.c2x, curve.c2y, curve.x, curve.y)
+  })
+  ctx.stroke()
+}
+
+function drawGuideCanvas(canvas, geometry, accent) {
+  const ctx = resizeCanvas(canvas, geometry)
+  if (!ctx) return
+
+  ctx.save()
+  ctx.strokeStyle = accent
+  ctx.globalAlpha = 0.08
+  ctx.lineWidth = 1
+  ctx.lineCap = 'round'
+  ctx.lineJoin = 'round'
+  strokeCurves(ctx, geometry.curves)
+  ctx.restore()
+}
+
+function upperBound(values, target) {
+  let lo = 0
+  let hi = values.length
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1
+    if (values[mid] <= target) lo = mid + 1
+    else hi = mid
+  }
+  return lo
+}
+
+function strokePolylinePrefix(ctx, geometry, targetLength) {
+  const { points, lengths, totalLength } = geometry
+  if (targetLength <= 0 || points.length < 2) return
+
+  const visibleLength = Math.min(targetLength, totalLength)
+  const endIndex = upperBound(lengths, visibleLength)
+
+  ctx.beginPath()
+  ctx.moveTo(points[0].x, points[0].y)
+
+  for (let i = 1; i < endIndex && i < points.length; i++) {
+    ctx.lineTo(points[i].x, points[i].y)
+  }
+
+  if (endIndex < points.length) {
+    const prev = points[endIndex - 1]
+    const next = points[endIndex]
+    const span = lengths[endIndex] - lengths[endIndex - 1] || 1
+    const mix = (visibleLength - lengths[endIndex - 1]) / span
+    ctx.lineTo(
+      prev.x + (next.x - prev.x) * mix,
+      prev.y + (next.y - prev.y) * mix
+    )
+  }
+
+  ctx.stroke()
+}
+
+function drawThreadCanvas(canvas, geometry, progress, accent) {
+  const ctx = resizeCanvas(canvas, geometry)
+  if (!ctx || progress <= 0) return
+
+  const targetLength = geometry.totalLength * clamp01(progress)
+
+  ctx.save()
+  ctx.strokeStyle = accent
+  ctx.lineCap = 'round'
+  ctx.lineJoin = 'round'
+
+  ctx.globalAlpha = 0.18
+  ctx.lineWidth = 4
+  strokePolylinePrefix(ctx, geometry, targetLength)
+
+  ctx.globalAlpha = 1
+  ctx.lineWidth = 1.5
+  strokePolylinePrefix(ctx, geometry, targetLength)
+  ctx.restore()
+}
+
+function launchEase(t) {
+  return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t
 }
 
 function CardContent({ job, i, isLeft }) {
@@ -138,18 +331,23 @@ function CardContent({ job, i, isLeft }) {
 export default function Experience() {
   const sectionRef    = useRef(null)
   const wrapperRef    = useRef(null)
-  const pathRef   = useRef(null)
+  const guideCanvasRef = useRef(null)
+  const threadCanvasRef = useRef(null)
   const flashRef  = useRef(null)
   const borderLineRef = useRef(null)
   const glowRef       = useRef(null)
-  const lenisRef      = useRef(null)
   const dotRefs       = useRef([])
   const ringRefs      = useRef([])
   const cardRefs      = useRef([])
   const fracsRef      = useRef([])
+  const geometryRef   = useRef(null)
+  const measureKeyRef = useRef('')
+  const progressRef   = useRef(-1)
+  const accentRef     = useRef('#ff5c5c')
+  const lenisRef      = useRef(null)
   const isMobile      = useIsMobile()
   const lenis         = useLenis()
-  const [pathD, setPathD] = useState(null)
+  const [geometryVersion, setGeometryVersion] = useState(0)
   const { content } = useLanguage()
   const jobs = content.experience
   const sectionTitle = content.ui.sections.experience
@@ -167,9 +365,28 @@ export default function Experience() {
       const r = dot.getBoundingClientRect()
       return { x: cx, y: r.top - wRect.top + r.height / 2 }
     })
+    const measureKey = [
+      Math.round(wRect.width),
+      Math.round(wRect.height),
+      ...pts.map(p => Math.round(p.y)),
+    ].join(':')
+    if (
+      measureKeyRef.current === measureKey &&
+      geometryRef.current &&
+      guideCanvasRef.current?.width &&
+      threadCanvasRef.current?.width
+    ) return
+    measureKeyRef.current = measureKey
+
     fracsRef.current = pts.map(p => p.y / wRect.height)
-    const nextPath = buildPath(pts, cx, wRect.height)
-    setPathD(prevPath => (prevPath === nextPath ? prevPath : nextPath))
+    const geometry = buildThreadGeometry(pts, cx, wRect.height)
+    if (!geometry) return
+
+    geometryRef.current = geometry
+    accentRef.current = getAccentColor(sectionRef.current)
+    drawGuideCanvas(guideCanvasRef.current, geometry, accentRef.current)
+    drawThreadCanvas(threadCanvasRef.current, geometry, Math.max(0, progressRef.current), accentRef.current)
+    setGeometryVersion(v => v + 1)
   }, [isMobile])
 
   useLayoutEffect(() => {
@@ -181,13 +398,10 @@ export default function Experience() {
   }, [remeasure, isMobile])
 
   useGSAP(() => {
-    if (isMobile || !pathD || !pathRef.current) return
-    const path = pathRef.current
-    const totalLen = path.getTotalLength()
-    if (!totalLen) return
+    const geometry = geometryRef.current
+    if (isMobile || !geometry) return
 
     /* initial hidden states */
-    gsap.set(path, { strokeDasharray: totalLen, strokeDashoffset: totalLen })
     dotRefs.current.forEach((dot, i) => {
       gsap.set(dot, { scale: 0, opacity: 0 })
       if (ringRefs.current[i]) gsap.set(ringRefs.current[i], { scale: 0.5, opacity: 0 })
@@ -198,102 +412,178 @@ export default function Experience() {
 
     const activated   = new Array(jobs.length).fill(false)
     const impactFired = { current: false }
+    const impactArmed = { current: false }
+    let pendingImpactCall = null
+    let scrollLocked = false
+    let lastScrollY = window.scrollY
+    let scrollDirection = 0
+
+    const updateScrollDirection = () => {
+      const nextY = window.scrollY
+      if (Math.abs(nextY - lastScrollY) > 0.5) {
+        scrollDirection = nextY > lastScrollY ? 1 : -1
+        lastScrollY = nextY
+      }
+    }
+
+    const preventUserScroll = (event) => {
+      event.preventDefault()
+    }
+
+    const preventScrollKey = (event) => {
+      if (scrollLockKeys.has(event.key)) event.preventDefault()
+    }
+
+    const lockUserScroll = () => {
+      if (scrollLocked) return
+      scrollLocked = true
+      lenisRef.current?.stop()
+      window.addEventListener('wheel', preventUserScroll, scrollLockEventOptions)
+      window.addEventListener('touchmove', preventUserScroll, scrollLockEventOptions)
+      window.addEventListener('keydown', preventScrollKey, true)
+    }
+
+    const unlockUserScroll = () => {
+      if (!scrollLocked) return
+      scrollLocked = false
+      window.removeEventListener('wheel', preventUserScroll, scrollLockEventOptions)
+      window.removeEventListener('touchmove', preventUserScroll, scrollLockEventOptions)
+      window.removeEventListener('keydown', preventScrollKey, true)
+      lenisRef.current?.start()
+    }
+
+    const launchToProjects = () => {
+      const target = document.getElementById('projects')
+      if (!target) {
+        unlockUserScroll()
+        navScrolling.active = false
+        return
+      }
+
+      const lenis = lenisRef.current
+      const targetY = Math.max(0, target.getBoundingClientRect().top + window.scrollY - PROJECTS_NAV_OFFSET)
+
+      navScrolling.active = true
+      if (lenis) {
+        lenis.start()
+        lenis.scrollTo(targetY, {
+          duration: PROJECTS_LAUNCH_DURATION,
+          easing: launchEase,
+          force: true,
+          lock: true,
+          onComplete: () => {
+            navScrolling.active = false
+            unlockUserScroll()
+            ScrollTrigger.refresh()
+          },
+        })
+        return
+      }
+
+      window.scrollTo({ top: targetY, behavior: 'smooth' })
+      window.setTimeout(() => {
+        navScrolling.active = false
+        unlockUserScroll()
+        ScrollTrigger.refresh()
+      }, PROJECTS_LAUNCH_DURATION * 1000 + 120)
+    }
 
     /* ── Impact animation: fires once when the last node activates ── */
     const triggerImpact = () => {
       if (impactFired.current) return
       impactFired.current = true
+      impactArmed.current = true
 
       /* skip entirely when nav is driving the scroll */
-      if (navScrolling.active) return
+      if (navScrolling.active || scrollDirection <= 0) {
+        impactArmed.current = false
+        impactFired.current = false
+        unlockUserScroll()
+        return
+      }
+
+      lockUserScroll()
 
       /* abbreviated version for repeat visits — just flash the border line */
       if (impactEverFired) {
         const borderEl = borderLineRef.current
         if (borderEl) {
           gsap.set(borderEl, { scaleX: 0, scaleY: 1, opacity: 1, transformOrigin: 'left center' })
-          gsap.to(borderEl,  { scaleX: 1, duration: 0.45, ease: 'power3.out' })
-          gsap.to(borderEl,  { opacity: 0, duration: 0.35, delay: 0.45 })
+          gsap.to(borderEl,  { scaleX: 1, duration: 0.22, ease: 'power3.out' })
+          gsap.to(borderEl,  { opacity: 0, duration: 0.18, delay: 0.22 })
         }
+        gsap.delayedCall(REPEAT_LAUNCH_DELAY, launchToProjects)
         return
       }
       impactEverFired = true
 
-      const mainPath = pathRef.current
       const flashEl  = flashRef.current
       const borderEl = borderLineRef.current
       const glowEl   = glowRef.current
-      const section  = sectionRef.current
-      if (!mainPath) return
-
-      const l = lenisRef.current
-      if (l) l.stop()
 
       const tl   = gsap.timeline()
-      const PEAK = 0.55   /* everything converges here */
+      const PEAK = IMPACT_PEAK   /* everything converges here */
 
       /* 1. All dots explode simultaneously */
       dotRefs.current.forEach((dot, i) => {
         const ring = ringRefs.current[i]
         if (!dot || !ring) return
-        tl.to(dot, { scale: 2.4, duration: 0.1, ease: 'power4.out', overwrite: 'auto' }, 0)
-        tl.to(dot, { scale: 1,   duration: 0.25, ease: 'elastic.out(1, 0.4)' },           0.1)
+        tl.to(dot, { scale: 2.4, duration: 0.055, ease: 'power4.out', overwrite: 'auto' }, 0)
+        tl.to(dot, { scale: 1,   duration: 0.14, ease: 'elastic.out(1, 0.4)' },           0.055)
         tl.fromTo(ring,
           { scale: 0.3, opacity: 0.9 },
-          { scale: 8,   opacity: 0, duration: 0.55, ease: 'expo.out', overwrite: 'auto' }, 0)
+          { scale: 8,   opacity: 0, duration: 0.28, ease: 'expo.out', overwrite: 'auto' }, 0)
       })
 
-      /* 2. Thread instantly flashes white then snaps back */
-      tl.to(mainPath, { attr: { strokeWidth: 5, stroke: '#ffffff' }, duration: 0.06 }, 0)
-      tl.to(mainPath, { attr: { strokeWidth: 1.5, stroke: 'var(--accent)' }, duration: 0.4, ease: 'power2.in' }, 0.06)
-
-      /* 3. Section flash */
+      /* 2. Section flash */
       if (flashEl) {
-        tl.to(flashEl, { opacity: 0.1, duration: 0.06 }, 0)
-        tl.to(flashEl, { opacity: 0,   duration: 0.35  }, 0.06)
+        tl.to(flashEl, { opacity: 0.1, duration: 0.035 }, 0)
+        tl.to(flashEl, { opacity: 0,   duration: 0.18  }, 0.035)
       }
 
-      /* 4. Bottom glow blooms and fades */
+      /* 3. Bottom glow blooms and fades */
       if (glowEl) {
-        tl.to(glowEl, { opacity: 1, duration: 0.18, ease: 'power3.out' }, 0)
-        tl.to(glowEl, { opacity: 0, duration: 0.45, ease: 'power2.in'  }, PEAK)
+        tl.to(glowEl, { opacity: 1, duration: 0.09, ease: 'power3.out' }, 0)
+        tl.to(glowEl, { opacity: 0, duration: 0.24, ease: 'power2.in'  }, PEAK)
       }
 
-      /* 5. Border sweeps and blooms at peak */
+      /* 4. Border sweeps and blooms at peak */
       if (borderEl) {
         tl.set(borderEl, { scaleX: 0, scaleY: 1, opacity: 1, transformOrigin: 'left center' }, 0)
-        tl.to(borderEl,  { scaleX: 1, duration: 0.35, ease: 'power3.out' }, 0)
-        tl.to(borderEl,  { scaleY: 5, duration: 0.12, ease: 'power2.out' }, PEAK - 0.08)
-        tl.to(borderEl,  { scaleY: 1, opacity: 0, duration: 0.35, ease: 'power2.in' }, PEAK + 0.05)
+        tl.to(borderEl,  { scaleX: 1, duration: 0.18, ease: 'power3.out' }, 0)
+        tl.to(borderEl,  { scaleY: 5, duration: 0.06, ease: 'power2.out' }, PEAK - 0.04)
+        tl.to(borderEl,  { scaleY: 1, opacity: 0, duration: 0.18, ease: 'power2.in' }, PEAK + 0.025)
       }
 
-      /* 6. Section shadow blooms */
-      if (section) {
-        tl.to(section, { boxShadow: '0 20px 90px -4px rgba(255,92,92,0.5)', duration: 0.2 }, 0)
-        tl.to(section, { boxShadow: 'none', duration: 0.5 }, PEAK)
-      }
+      tl.call(launchToProjects, [], PEAK)
+    }
 
-      /* 7. Unlock scroll and launch into Projects at peak */
-      tl.call(() => {
-        const lenis  = lenisRef.current
-        const target = document.getElementById('projects')
-        if (lenis) lenis.start()
-        if (!target) return
-        const y = target.getBoundingClientRect().top + window.scrollY
-        if (lenis) lenis.scrollTo(y, { duration: 1.4, easing: t => t < 0.5 ? 2*t*t : -1+(4-2*t)*t })
-        else       window.scrollTo({ top: y, behavior: 'smooth' })
-      }, [], PEAK)
+    const armImpact = () => {
+      if (impactArmed.current || impactFired.current || navScrolling.active || scrollDirection <= 0) return
+      impactArmed.current = true
+      lockUserScroll()
+      pendingImpactCall = gsap.delayedCall(IMPACT_DELAY, triggerImpact)
     }
 
     const updateThread = () => {
       const wrapper = wrapperRef.current
-      if (!wrapper) return
+      const currentGeometry = geometryRef.current
+      if (!wrapper || !currentGeometry) return
+      updateScrollDirection()
 
       const rect = wrapper.getBoundingClientRect()
       const readerY = window.innerHeight * THREAD_READER_RATIO
       const pathProgress = clamp01((readerY - rect.top) / rect.height + THREAD_DRAW_LEAD)
 
-      gsap.set(path, { strokeDashoffset: totalLen * (1 - pathProgress) })
+      if (Math.abs(pathProgress - progressRef.current) > THREAD_PROGRESS_EPSILON) {
+        progressRef.current = pathProgress
+        drawThreadCanvas(threadCanvasRef.current, currentGeometry, pathProgress, accentRef.current)
+      }
+
+      const finalShowAt = fracsRef.current.length
+        ? Math.max(0, fracsRef.current[fracsRef.current.length - 1] - 0.015)
+        : 1
+      if (pathProgress >= finalShowAt) armImpact()
 
       fracsRef.current.forEach((frac, i) => {
         const showAt = Math.max(0, frac - 0.015)
@@ -315,7 +605,7 @@ export default function Experience() {
 
           /* fire the impact animation when the last node activates */
           if (i === fracsRef.current.length - 1) {
-            gsap.delayedCall(0.2, triggerImpact)
+            armImpact()
           }
 
         } else if (pathProgress < hideBefore && activated[i]) {
@@ -325,7 +615,13 @@ export default function Experience() {
           if (!dot || !card) return
           gsap.to(dot,  { scale: 0, opacity: 0, duration: 0.18, overwrite: 'auto' })
           gsap.to(card, { x: i % 2 === 0 ? -70 : 70, opacity: 0, duration: 0.22, overwrite: 'auto' })
-          if (i === fracsRef.current.length - 1) impactFired.current = false
+          if (i === fracsRef.current.length - 1) {
+            pendingImpactCall?.kill()
+            pendingImpactCall = null
+            impactArmed.current = false
+            impactFired.current = false
+            unlockUserScroll()
+          }
         }
       })
     }
@@ -341,7 +637,12 @@ export default function Experience() {
       onUpdate: updateThread,
       onRefresh: updateThread,
     })
-  }, { scope: sectionRef, dependencies: [pathD, isMobile, jobs], revertOnUpdate: true })
+
+    return () => {
+      pendingImpactCall?.kill()
+      unlockUserScroll()
+    }
+  }, { scope: sectionRef, dependencies: [geometryVersion, isMobile, jobs], revertOnUpdate: true })
 
   /* ── Mobile ── */
   if (isMobile) return <MobileExperience jobs={jobs} sectionTitle={sectionTitle} />
@@ -353,32 +654,8 @@ export default function Experience() {
       </div>
 
       <div ref={wrapperRef} style={s.wrapper}>
-        {pathD && (
-          <svg style={s.svg} xmlns="http://www.w3.org/2000/svg">
-            <defs>
-              <filter id="exp-glow" x="-80%" y="-20%" width="260%" height="140%">
-                <feGaussianBlur stdDeviation="2.5" result="blur" />
-                <feMerge>
-                  <feMergeNode in="blur" />
-                  <feMergeNode in="SourceGraphic" />
-                </feMerge>
-              </filter>
-            </defs>
-            {/* faint guide path */}
-            <path d={pathD} stroke="var(--accent)" strokeWidth="1" strokeOpacity="0.08" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-            {/* animated drawn path */}
-            <path
-              ref={pathRef}
-              d={pathD}
-              stroke="var(--accent)"
-              strokeWidth="1.5"
-              fill="none"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              filter="url(#exp-glow)"
-            />
-          </svg>
-        )}
+        <canvas ref={guideCanvasRef} aria-hidden="true" style={s.canvas} />
+        <canvas ref={threadCanvasRef} aria-hidden="true" style={{ ...s.canvas, zIndex: 1 }} />
 
         {/* section-wide flash overlay */}
         <div ref={flashRef} style={{
@@ -426,7 +703,7 @@ export default function Experience() {
         position: 'absolute', bottom: 0, left: 0, right: 0,
         height: '220px',
         background: 'linear-gradient(to top, rgba(230,50,50,0.55) 0%, rgba(230,50,50,0.12) 60%, transparent 100%)',
-        opacity: 0, pointerEvents: 'none', zIndex: 3,
+        opacity: 0, pointerEvents: 'none', zIndex: 3, willChange: 'opacity',
       }} />
 
       {/* border sweep — glowing line that races across when impact fires */}
@@ -434,9 +711,9 @@ export default function Experience() {
         position: 'absolute', bottom: 0, left: 0, right: 0,
         height: '1px',
         background: 'var(--accent)',
-        boxShadow: '0 0 14px 3px var(--accent)',
         opacity: 0, pointerEvents: 'none', zIndex: 5,
         transform: 'scaleX(0)', transformOrigin: 'left center',
+        willChange: 'transform, opacity',
       }} />
     </section>
   )
@@ -496,8 +773,8 @@ const s = {
   header: { padding: '2.5rem 6vw 2rem', borderBottom: '1px solid var(--border)' },
   headerLabel: { fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--accent)', letterSpacing: '0.2em', textTransform: 'uppercase' },
   wrapper: { position: 'relative', padding: '4vh 0 6vh' },
-  svg: { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', overflow: 'visible' },
-  entry: { display: 'grid', gridTemplateColumns: '1fr 44px 1fr', alignItems: 'center', minHeight: 'clamp(260px, 42vh, 460px)' },
+  canvas: { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 0, contain: 'strict' },
+  entry: { display: 'grid', gridTemplateColumns: '1fr 44px 1fr', alignItems: 'center', minHeight: 'clamp(260px, 42vh, 460px)', position: 'relative', zIndex: 2 },
   col: { display: 'flex', alignItems: 'center', padding: '2rem 0' },
   nodeCol: { display: 'flex', justifyContent: 'center', alignItems: 'center', position: 'relative', zIndex: 1 },
   nodeWrap: { position: 'relative', width: '12px', height: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' },

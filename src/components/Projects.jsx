@@ -63,7 +63,7 @@ function CardContent({ project, labels }) {
 
 export default function Projects() {
   const sectionRef = useRef(null)
-  const scrollRef  = useRef(null)
+  const stageRef   = useRef(null)
   const cardRefs   = useRef([])
   const isMobile   = useIsMobile()
   const { content } = useLanguage()
@@ -74,32 +74,50 @@ export default function Projects() {
 
   useGSAP(() => {
     if (isMobile) return
-    const scroll = scrollRef.current
+    const stage = stageRef.current
     const cards  = cardRefs.current
-    if (!scroll || !cards.length) return
+    if (!stage || !cards.length) return
+
+    const transforms = cards.map((card, i) => ({
+      card,
+      xPercent: i > 0 ? 100 : 0,
+      scale: 1,
+    }))
+    const renderCard = (i) => {
+      const transform = transforms[i]
+      if (!transform?.card) return
+      transform.card.style.transform =
+        `translate3d(${transform.xPercent}%, 0, 0) scale(${transform.scale})`
+    }
 
     /* all cards except the first start off-screen to the right */
-    cards.forEach((card, i) => {
-      if (i > 0) gsap.set(card, { x: '100%' })
-    })
+    transforms.forEach((_, i) => renderCard(i))
+    let lastIdx = -1
 
     ScrollTrigger.create({
-      trigger: scroll,
+      trigger: stage,
       start: 'top 52px',
-      end:   'bottom bottom',   /* stage stays sticky until last card is fully in */
+      end: () => `+=${Math.max(1, N - 1) * window.innerHeight}`,
+      pin: true,
+      pinSpacing: true,
       scrub: true,
+      invalidateOnRefresh: true,
       onUpdate(self) {
         const idx = self.progress * (N - 1)   /* 0 → N-1 over full scroll */
+        if (Math.abs(idx - lastIdx) < 0.001) return
+        lastIdx = idx
 
         cards.forEach((card, i) => {
           if (i === 0) return
           /* each card occupies a 1-unit window of idx */
           const cp = gsap.utils.clamp(0, 1, idx - (i - 1))
-          gsap.set(card, { x: `${(1 - cp) * 100}%` })
+          transforms[i].xPercent = (1 - cp) * 100
+          renderCard(i)
 
           /* slightly scale-down the card being covered */
           if (cards[i - 1]) {
-            gsap.set(cards[i - 1], { scale: 1 - cp * 0.04 })
+            transforms[i - 1].scale = 1 - cp * 0.04
+            renderCard(i - 1)
           }
         })
       },
@@ -134,19 +152,19 @@ export default function Projects() {
           </div>
         ))
       ) : (
-        /* ── Desktop: sticky stacked cards ── */
-        <div ref={scrollRef} style={{ height: `${(N - 1) * 100}svh` }}>
-          <div style={s.stage}>
-            {projects.map((project, i) => (
-              <div
-                key={project.number}
-                ref={el => (cardRefs.current[i] = el)}
-                style={{ ...s.card, zIndex: i + 1 }}
-              >
-                <CardContent project={project} labels={labels} />
-              </div>
-            ))}
-          </div>
+        /* ── Desktop: pinned stacked cards ── */
+        <div ref={stageRef} style={s.stage}>
+          {projects.map((project, i) => (
+            <div
+              key={project.number}
+              ref={el => (cardRefs.current[i] = el)}
+              data-project-card
+              data-project-title={project.name}
+              style={{ ...s.card, zIndex: i + 1 }}
+            >
+              <CardContent project={project} labels={labels} />
+            </div>
+          ))}
         </div>
       )}
 
@@ -189,10 +207,9 @@ const s = {
     color: 'var(--accent)', letterSpacing: '0.2em', textTransform: 'uppercase',
   },
 
-  /* sticky stage — sits inside the scroll driver div */
+  /* pinned stage — ScrollTrigger owns the scroll distance */
   stage: {
-    position: 'sticky',
-    top: `${NAV_H}px`,
+    position: 'relative',
     height: `calc(100svh - ${NAV_H}px)`,
     overflow: 'hidden',
   },
@@ -205,6 +222,8 @@ const s = {
     borderTop: '1px solid var(--border)',
     display: 'flex',
     alignItems: 'center',
+    willChange: 'transform',
+    backfaceVisibility: 'hidden',
   },
 
   /* two-column layout inside each card */
