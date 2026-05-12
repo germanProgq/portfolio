@@ -129,8 +129,8 @@ export default function Nav({ visible }) {
     const thumb  = thumbRef.current
     if (toggle && thumb) {
       gsap.timeline()
-        .to(thumb,  { '--thumb-scale': 1.08, duration: 0.08, ease: 'power2.out' })
-        .to(thumb,  { '--thumb-scale': 1,    duration: 0.18, ease: 'power2.out' })
+        .to(thumb,  { filter: 'brightness(1.14)', duration: 0.08, ease: 'power2.out' })
+        .to(thumb,  { filter: 'brightness(1)',    duration: 0.18, ease: 'power2.out' })
       gsap.to(toggle, {
         boxShadow: '0 0 0 1px rgba(255,92,92,0.32), 0 0 14px rgba(255,92,92,0.12)',
         duration: 0.12,
@@ -269,7 +269,7 @@ export default function Nav({ visible }) {
               aria-hidden="true"
               style={{
                 ...styles.languageThumb,
-                '--thumb-x': lang === 'ru' ? '38px' : '0px',
+                transform: lang === 'ru' ? 'translateX(38px)' : 'translateX(0)',
               }}
             />
             <span style={{ ...styles.languageOption, color: lang === 'en' ? 'var(--bg)' : 'var(--muted)' }}>EN</span>
@@ -322,7 +322,7 @@ export default function Nav({ visible }) {
           className="language-toggle"
           data-cursor
         >
-          <span aria-hidden="true" style={{ ...styles.languageThumb, '--thumb-x': lang === 'ru' ? '38px' : '0px' }} />
+          <span aria-hidden="true" style={{ ...styles.languageThumb, transform: lang === 'ru' ? 'translateX(38px)' : 'translateX(0)' }} />
           <span style={{ ...styles.languageOption, color: lang === 'en' ? 'var(--bg)' : 'var(--muted)' }}>EN</span>
           <span style={{ ...styles.languageOption, color: lang === 'ru' ? 'var(--bg)' : 'var(--muted)' }}>RU</span>
         </button>
@@ -406,7 +406,6 @@ const styles = {
     position: 'absolute', left: '3px', top: '3px', width: '34px', height: '24px',
     borderRadius: '999px', background: 'var(--accent)',
     boxShadow: '0 0 12px rgba(255, 92, 92, 0.35)',
-    transform: 'translateX(var(--thumb-x, 0px)) scale(var(--thumb-scale, 1))',
     transition: 'transform 0.28s cubic-bezier(0.22, 1, 0.36, 1)', zIndex: 0,
   },
   languageOption: {

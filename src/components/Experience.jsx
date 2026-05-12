@@ -288,6 +288,25 @@ function launchEase(t) {
   return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t
 }
 
+function getExpElems(card) {
+  return {
+    company: card.querySelector('[data-anim="company"]'),
+    role:    card.querySelector('[data-anim="role"]'),
+    meta:    card.querySelector('[data-anim="meta"]'),
+    bullets: [...card.querySelectorAll('[data-anim="bullet"]')],
+  }
+}
+
+function animateExpIn(card) {
+  const { company, role, meta, bullets } = getExpElems(card)
+  const tl = gsap.timeline()
+  if (company)       tl.fromTo(company, { y: 24, opacity: 0 }, { y: 0, opacity: 1, duration: 0.38, ease: 'power3.out', overwrite: 'auto' }, 0.08)
+  if (role)          tl.fromTo(role,    { y: 16, opacity: 0 }, { y: 0, opacity: 1, duration: 0.32, ease: 'power3.out', overwrite: 'auto' }, 0.2)
+  if (meta)          tl.fromTo(meta,    { y: 10, opacity: 0 }, { y: 0, opacity: 1, duration: 0.28, ease: 'power3.out', overwrite: 'auto' }, 0.3)
+  if (bullets.length) tl.fromTo(bullets, { y: 8, opacity: 0 }, { y: 0, opacity: 1, duration: 0.24, stagger: 0.07, ease: 'power3.out', overwrite: 'auto' }, 0.38)
+  return tl
+}
+
 function CardContent({ job, i, isLeft }) {
   const flip = isLeft ? 'row-reverse' : 'row'
   const align = isLeft ? 'flex-end' : 'flex-start'
@@ -297,6 +316,7 @@ function CardContent({ job, i, isLeft }) {
       <div style={{ ...cs.top, flexDirection: flip }}>
         {job.website ? (
           <a
+            data-anim="company"
             href={job.website}
             target="_blank"
             rel="noopener noreferrer"
@@ -307,19 +327,19 @@ function CardContent({ job, i, isLeft }) {
             {job.company}
           </a>
         ) : (
-        <span style={cs.company} data-i18n>{job.company}</span>
+        <span data-anim="company" style={cs.company} data-i18n>{job.company}</span>
         )}
         <span style={cs.idx}>{String(i + 1).padStart(2, '0')}</span>
       </div>
-      <h3 style={{ ...cs.role, textAlign: ta }} data-i18n>{job.role}</h3>
-      <div style={{ ...cs.meta, flexDirection: flip, justifyContent: align }}>
+      <h3 data-anim="role" style={{ ...cs.role, textAlign: ta }} data-i18n>{job.role}</h3>
+      <div data-anim="meta" style={{ ...cs.meta, flexDirection: flip, justifyContent: align }}>
         <span style={cs.period} data-i18n>{job.period}</span>
         <span style={cs.metaDot}>·</span>
         <span style={cs.period} data-i18n>{job.type}</span>
       </div>
       <ul style={{ ...cs.bullets, alignItems: align }}>
         {job.bullets.map((b, j) => (
-          <li key={j} style={{ ...cs.bullet, flexDirection: flip }}>
+          <li key={j} data-anim="bullet" style={{ ...cs.bullet, flexDirection: flip }}>
             <span style={cs.dash}>—</span>
             <span style={cs.bText} data-i18n>{b}</span>
           </li>
@@ -654,6 +674,7 @@ export default function Experience() {
             { scale: 4, opacity: 0, duration: 0.8, ease: 'power2.out', overwrite: 'auto' }
           )
           gsap.to(card, { x: 0, opacity: 1, duration: 0.48, delay: 0.04, ease: 'power3.out', overwrite: 'auto' })
+          animateExpIn(card)
 
           /* fire the impact animation when the last node activates */
           if (i === fracsRef.current.length - 1) {
@@ -776,11 +797,24 @@ function MobileExperience({ jobs, sectionTitle }) {
   const ref = useRef(null)
   useGSAP(() => {
     ref.current.querySelectorAll('[data-mc]').forEach(card => {
-      gsap.fromTo(card,
-        { y: 28, opacity: 0 },
-        { y: 0, opacity: 1, duration: 0.5, ease: 'power3.out',
-          scrollTrigger: { trigger: card, start: 'top 86%', toggleActions: 'play none none reverse' } }
-      )
+      const company = card.querySelector('[data-anim="company"]')
+      const role    = card.querySelector('[data-anim="role"]')
+      const meta    = card.querySelector('[data-anim="meta"]')
+      const bullets = [...card.querySelectorAll('[data-anim="bullet"]')]
+
+      /* initial hidden states */
+      if (company) gsap.set(company, { x: -60, opacity: 0 })
+      if (role)    gsap.set(role,    { y: 18, opacity: 0 })
+      if (meta)    gsap.set(meta,    { y: 12, opacity: 0 })
+      if (bullets.length) gsap.set(bullets, { y: 8, opacity: 0 })
+
+      const tl = gsap.timeline({
+        scrollTrigger: { trigger: card, start: 'top 86%', toggleActions: 'play none none reverse' },
+      })
+      if (company)        tl.fromTo(company, { x: -60, opacity: 0 }, { x: 0, opacity: 1, duration: 0.45, ease: 'power3.out' }, 0)
+      if (role)           tl.fromTo(role,    { y: 18,  opacity: 0 }, { y: 0, opacity: 1, duration: 0.34, ease: 'power3.out' }, 0.14)
+      if (meta)           tl.fromTo(meta,    { y: 12,  opacity: 0 }, { y: 0, opacity: 1, duration: 0.28, ease: 'power3.out' }, 0.24)
+      if (bullets.length) tl.fromTo(bullets, { y: 8,   opacity: 0 }, { y: 0, opacity: 1, duration: 0.24, stagger: 0.07, ease: 'power3.out' }, 0.32)
     })
   }, { scope: ref, dependencies: [jobs], revertOnUpdate: true })
 
@@ -791,23 +825,23 @@ function MobileExperience({ jobs, sectionTitle }) {
         <div key={job.company} data-mc style={mob.card}>
           <div style={mob.top}>
             {job.website ? (
-              <a href={job.website} target="_blank" rel="noopener noreferrer" style={mob.companyLink} data-cursor data-i18n>
+              <a data-anim="company" href={job.website} target="_blank" rel="noopener noreferrer" style={mob.companyLink} data-cursor data-i18n>
                 {job.company}
               </a>
             ) : (
-              <span style={mob.company} data-i18n>{job.company}</span>
+              <span data-anim="company" style={mob.company} data-i18n>{job.company}</span>
             )}
             <span style={mob.idx}>{String(i + 1).padStart(2, '0')}</span>
           </div>
-          <h3 style={mob.role} data-i18n>{job.role}</h3>
-          <div style={mob.meta}>
+          <h3 data-anim="role" style={mob.role} data-i18n>{job.role}</h3>
+          <div data-anim="meta" style={mob.meta}>
             <span style={mob.period} data-i18n>{job.period}</span>
             <span style={mob.dot}>·</span>
             <span style={mob.period} data-i18n>{job.type}</span>
           </div>
           <ul style={mob.bullets}>
             {job.bullets.map((b, j) => (
-              <li key={j} style={mob.bullet}>
+              <li key={j} data-anim="bullet" style={mob.bullet}>
                 <span style={mob.dash}>—</span>
                 <span style={mob.txt} data-i18n>{b}</span>
               </li>

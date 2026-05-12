@@ -24,7 +24,7 @@ function CardContent({ project, labels }) {
     <div style={s.cardInner}>
       {/* left: number + title */}
       <div style={s.titleCol}>
-        <span style={s.number}>{project.number}</span>
+        <span data-anim="num" style={s.number}>{project.number}</span>
         <a href={titleHref} target="_blank" rel="noopener noreferrer" style={s.titleLink} data-cursor>
           <h3 data-text={project.name} style={s.title} className="project-title" data-i18n>
             {project.name}
@@ -34,10 +34,10 @@ function CardContent({ project, labels }) {
 
       {/* right: description + tags + links */}
       <div style={s.bodyCol}>
-        <p style={s.description} data-i18n>{project.description}</p>
+        <p data-anim="desc" style={s.description} data-i18n>{project.description}</p>
         <div style={s.tags}>
           {project.tags.map((tag, j) => (
-            <span key={j} style={s.tag} data-i18n>
+            <span key={j} data-anim="tag" style={s.tag} data-i18n>
               {tag}{j < project.tags.length - 1 && <span style={s.tagSep}> /</span>}
             </span>
           ))}
@@ -45,13 +45,13 @@ function CardContent({ project, labels }) {
         <div style={s.links}>
           {project.website && (
             <a href={project.website} target="_blank" rel="noopener noreferrer"
-              style={s.iconLink} className="proj-link" title={labels.website} data-cursor data-i18n>
+              data-anim="link" style={s.iconLink} className="proj-link" title={labels.website} data-cursor data-i18n>
               <GlobeIcon /><span>{labels.website}</span>
             </a>
           )}
           {project.github && (
             <a href={project.github} target="_blank" rel="noopener noreferrer"
-              style={s.iconLink} className="proj-link" title={labels.github} data-cursor data-i18n>
+              data-anim="link" style={s.iconLink} className="proj-link" title={labels.github} data-cursor data-i18n>
               <GithubIcon /><span>{labels.github}</span>
             </a>
           )}
@@ -59,6 +59,33 @@ function CardContent({ project, labels }) {
       </div>
     </div>
   )
+}
+
+function getCardElems(card) {
+  return {
+    num:   card.querySelector('[data-anim="num"]'),
+    desc:  card.querySelector('[data-anim="desc"]'),
+    tags:  [...card.querySelectorAll('[data-anim="tag"]')],
+    links: [...card.querySelectorAll('[data-anim="link"]')],
+  }
+}
+
+function setCardHidden(card) {
+  const { num, desc, tags, links } = getCardElems(card)
+  if (num)  gsap.set(num,  { y: 10, opacity: 0 })
+  if (desc) gsap.set(desc, { y: 18, opacity: 0 })
+  if (tags.length)  gsap.set(tags,  { y: 12, opacity: 0 })
+  if (links.length) gsap.set(links, { y: 10, opacity: 0 })
+}
+
+function animateCardIn(card) {
+  const { num, desc, tags, links } = getCardElems(card)
+  const tl = gsap.timeline()
+  if (num)  tl.fromTo(num,  { y: 10, opacity: 0 }, { y: 0, opacity: 1, duration: 0.25, ease: 'power3.out' }, 0)
+  if (desc) tl.fromTo(desc, { y: 18, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4,  ease: 'power3.out' }, 0.1)
+  if (tags.length)  tl.fromTo(tags,  { y: 12, opacity: 0 }, { y: 0, opacity: 1, duration: 0.3, stagger: 0.05, ease: 'power3.out' }, 0.2)
+  if (links.length) tl.fromTo(links, { y: 10, opacity: 0 }, { y: 0, opacity: 1, duration: 0.28, stagger: 0.07, ease: 'power3.out' }, 0.28)
+  return tl
 }
 
 export default function Projects() {
@@ -78,6 +105,9 @@ export default function Projects() {
     const cards  = cardRefs.current
     if (!stage || !cards.length) return
 
+    /* hide all card interiors before any scroll */
+    cards.forEach(card => setCardHidden(card))
+
     const transforms = cards.map((card, i) => ({
       card,
       xPercent: i > 0 ? 100 : 0,
@@ -94,6 +124,9 @@ export default function Projects() {
     transforms.forEach((_, i) => renderCard(i))
     let lastIdx = -1
 
+    /* track which cards have had their inner animation fired */
+    const innerFired = new Array(N).fill(false)
+
     ScrollTrigger.create({
       trigger: stage,
       start: 'top 52px',
@@ -107,6 +140,12 @@ export default function Projects() {
         if (Math.abs(idx - lastIdx) < 0.001) return
         lastIdx = idx
 
+        /* card 0 is always in position — animate its interior on first onUpdate */
+        if (!innerFired[0]) {
+          innerFired[0] = true
+          animateCardIn(cards[0])
+        }
+
         cards.forEach((card, i) => {
           if (i === 0) return
           /* each card occupies a 1-unit window of idx */
@@ -119,22 +158,57 @@ export default function Projects() {
             transforms[i - 1].scale = 1 - cp * 0.04
             renderCard(i - 1)
           }
+
+          /* fire inner animation when card is mostly arrived */
+          if (cp >= 0.88 && !innerFired[i]) {
+            innerFired[i] = true
+            animateCardIn(card)
+          }
+          /* reset when card has slid well off screen (user scrolled back) */
+          if (cp < 0.08 && innerFired[i]) {
+            innerFired[i] = false
+            setCardHidden(card)
+          }
         })
+      },
+      onLeaveBack() {
+        /* user scrolled back above the section — reset card 0 */
+        if (innerFired[0]) {
+          innerFired[0] = false
+          setCardHidden(cards[0])
+        }
       },
     })
   }, { scope: sectionRef, dependencies: [isMobile, N], revertOnUpdate: true })
 
-  /* mobile: per-card ScrollTrigger slide-in */
+  /* mobile: per-card ScrollTrigger slide-in with staggered inner elements */
   useGSAP(() => {
     if (!isMobile) return
     sectionRef.current.querySelectorAll('[data-mob-panel]').forEach(panel => {
-      gsap.fromTo(panel,
-        { y: 40, opacity: 0 },
-        {
-          y: 0, opacity: 1, duration: 0.5, ease: 'power3.out',
-          scrollTrigger: { trigger: panel, start: 'top 88%', toggleActions: 'play none none reverse' },
-        }
-      )
+      const num   = panel.querySelector('[data-anim="num"]')
+      const title = panel.querySelector('.project-title')
+      const desc  = panel.querySelector('[data-anim="desc"]')
+      const tags  = [...panel.querySelectorAll('[data-anim="tag"]')]
+      const links = [...panel.querySelectorAll('[data-anim="link"]')]
+
+      /* set initial hidden state — title slides from left */
+      gsap.set([num, desc, ...tags, ...links].filter(Boolean), { y: 0, opacity: 0 })
+      if (title) gsap.set(title, { x: -72, opacity: 0 })
+
+      const tl = gsap.timeline({
+        scrollTrigger: { trigger: panel, start: 'top 86%', toggleActions: 'play none none reverse' },
+      })
+      if (num)  tl.fromTo(num,  { y: 10, opacity: 0 }, { y: 0, opacity: 1, duration: 0.25, ease: 'power3.out' }, 0)
+      if (title) tl.fromTo(title, { x: -72, opacity: 0 }, {
+        x: 0, opacity: 1, duration: 0.52, ease: 'power3.out',
+        onComplete() {
+          title.classList.add('project-title--glitch')
+          setTimeout(() => title.classList.remove('project-title--glitch'), 420)
+        },
+      }, 0.04)
+      if (desc)         tl.fromTo(desc,  { y: 16, opacity: 0 }, { y: 0, opacity: 1, duration: 0.36, ease: 'power3.out' }, 0.22)
+      if (tags.length)  tl.fromTo(tags,  { y: 10, opacity: 0 }, { y: 0, opacity: 1, duration: 0.28, stagger: 0.04, ease: 'power3.out' }, 0.32)
+      if (links.length) tl.fromTo(links, { y: 8,  opacity: 0 }, { y: 0, opacity: 1, duration: 0.26, stagger: 0.07, ease: 'power3.out' }, 0.40)
     })
   }, { scope: sectionRef, dependencies: [isMobile, projects], revertOnUpdate: true })
 
@@ -194,6 +268,10 @@ const css = `
   }
   .project-title:hover::before { animation: glitch-top 0.28s steps(1) forwards; }
   .project-title:hover::after  { animation: glitch-bot 0.28s steps(1) .04s forwards; }
+  @media (max-width: 767px) {
+    .project-title--glitch::before { animation: glitch-top 0.28s steps(1) forwards; }
+    .project-title--glitch::after  { animation: glitch-bot 0.28s steps(1) .04s forwards; }
+  }
   .proj-link:hover { color: var(--fg) !important; border-color: var(--fg) !important; }
 `
 
