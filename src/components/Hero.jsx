@@ -24,6 +24,8 @@ export default function Hero({ active = false }) {
     { label: 'Email', href: `mailto:${person.contact.email}` },
   ]
 
+  const hasActivatedRef = useRef(false)
+
   const { ref: nameRef, replay } = useScramble({
     text: person.name,
     speed: 1,
@@ -33,6 +35,10 @@ export default function Hero({ active = false }) {
     seed: 2,
     chance: 0.9,
     playOnMount: false,
+    onAnimationEnd: () => {
+      if (!nameRef.current) return
+      gsap.to(nameRef.current, { opacity: 1, duration: 0.35, ease: 'power3.out' })
+    },
   })
 
   useGSAP(() => {
@@ -74,6 +80,16 @@ export default function Hero({ active = false }) {
         '-=0.15'
       )
   }, { dependencies: [active], revertOnUpdate: true })
+
+  useEffect(() => {
+    if (active) hasActivatedRef.current = true
+  }, [active])
+
+  /* hide name while scramble resolves latin↔cyrillic garbage characters */
+  useEffect(() => {
+    if (!hasActivatedRef.current || !nameRef.current) return
+    gsap.set(nameRef.current, { opacity: 0 })
+  }, [person.name])
 
   useEffect(() => {
     setRoleIndex(0)

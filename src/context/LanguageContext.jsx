@@ -132,131 +132,141 @@ export function LanguageProvider({ children }) {
     const preservedPosition = captureScrollPosition()
     const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 
-    const restorePreservedPosition = () => {
+    /* step 3: smooth scroll back to where the user was */
+    const scrollBack = () => {
       ScrollTrigger.refresh()
       const targetY = resolveScrollY(preservedPosition)
-
       navScrolling.active = true
-      if (lenis) {
-        lenis.scrollTo(targetY, { immediate: true, force: true })
-      } else {
-        window.scrollTo(0, targetY)
-      }
-    }
-
-    const commitLanguage = () => {
-      navScrolling.active = true
-      flushSync(() => setLang(targetLang))
-      restorePreservedPosition()
-    }
-
-    const finish = () => {
-      requestAnimationFrame(() => {
-        ScrollTrigger.refresh()
+      const done = () => {
         navScrolling.active = false
         saveScrollPosition()
         busyRef.current = false
+      }
+      if (lenis && targetY > 60) {
+        lenis.scrollTo(targetY, {
+          duration: 0.7,
+          easing: (t) => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t,
+          lock: true,
+          onComplete: done,
+        })
+      } else {
+        if (lenis) lenis.scrollTo(targetY, { immediate: true, force: true })
+        else window.scrollTo(0, targetY)
+        done()
+      }
+    }
+
+    /* step 2: run glitch animation + commit language, then scroll back */
+    const doSwitch = () => {
+      if (reduceMotion) {
+        navScrolling.active = true
+        flushSync(() => setLang(targetLang))
+        scrollBack()
+        return
+      }
+
+      const outgoingText = getTextNodes()
+      gsap.killTweensOf(outgoingText)
+
+      if (!outgoingText.length) {
+        navScrolling.active = true
+        flushSync(() => setLang(targetLang))
+        scrollBack()
+        return
+      }
+
+      gsap.set(outgoingText, {
+        willChange: 'transform, opacity, text-shadow',
+        transformOrigin: 'center center',
+      })
+
+      gsap.to(outgoingText, {
+        opacity: 0.42,
+        x: () => gsap.utils.random(-2, 2, 1),
+        y: () => gsap.utils.random(-1, 1, 1),
+        textShadow: '1px 0 rgba(255,92,92,0.45), -1px 0 rgba(255,255,255,0.22)',
+        duration: 0.08,
+        ease: 'steps(1)',
+        stagger: { each: 0.0015, from: 'start' },
+        onComplete() {
+          navScrolling.active = true
+          flushSync(() => setLang(targetLang))
+          requestAnimationFrame(() => {
+            const incomingText = getTextNodes()
+            gsap.killTweensOf(incomingText)
+            if (!incomingText.length) {
+              gsap.set(outgoingText, { clearProps: 'opacity,transform,textShadow,willChange,transformOrigin' })
+              scrollBack()
+              return
+            }
+
+            const scrambleTargets = pickScrambleTargets(incomingText)
+            const scrambleSet = new Set(scrambleTargets)
+            const passiveTargets = incomingText.filter((el) => !scrambleSet.has(el))
+
+            gsap.set(incomingText, {
+              willChange: 'transform, opacity, text-shadow',
+              transformOrigin: 'center center',
+            })
+
+            if (scrambleTargets.length) {
+              gsap.set(scrambleTargets, {
+                opacity: 0.82,
+                x: () => gsap.utils.random(-2, 2, 1),
+                y: () => gsap.utils.random(-1, 1, 1),
+                textShadow: '1px 0 rgba(255,92,92,0.5), -1px 0 rgba(255,255,255,0.18)',
+              })
+            }
+
+            if (passiveTargets.length) {
+              gsap.fromTo(
+                passiveTargets,
+                { opacity: 0.55, y: 2 },
+                { opacity: 1, y: 0, duration: 0.22, ease: 'power2.out' }
+              )
+            }
+
+            if (!scrambleTargets.length) {
+              gsap.to(incomingText, {
+                opacity: 1, x: 0, y: 0,
+                textShadow: '0px 0 rgba(255,92,92,0)',
+                duration: 0.22, ease: 'power2.out',
+                onComplete() {
+                  gsap.set(incomingText, { clearProps: 'opacity,transform,textShadow,willChange,transformOrigin' })
+                  scrollBack()
+                },
+              })
+              return
+            }
+
+            scrambleTextElements(scrambleTargets, () => {
+              gsap.to(incomingText, {
+                opacity: 1, x: 0, y: 0,
+                textShadow: '0px 0 rgba(255,92,92,0)',
+                duration: 0.16, ease: 'power2.out',
+                onComplete() {
+                  gsap.set(incomingText, { clearProps: 'opacity,transform,textShadow,willChange,transformOrigin' })
+                  scrollBack()
+                },
+              })
+            })
+          })
+        },
       })
     }
 
-    if (reduceMotion) {
-      commitLanguage()
-      finish()
-      return
+    /* step 1: if not already at top, scroll there before switching */
+    if (!reduceMotion && window.scrollY > 80 && lenis) {
+      navScrolling.active = true
+      lenis.scrollTo(0, {
+        duration: 0.55,
+        easing: (t) => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t,
+        lock: true,
+        onComplete: doSwitch,
+      })
+    } else {
+      doSwitch()
     }
-
-    const outgoingText = getTextNodes()
-    gsap.killTweensOf(outgoingText)
-
-    if (!outgoingText.length) {
-      commitLanguage()
-      finish()
-      return
-    }
-
-    gsap.set(outgoingText, {
-      willChange: 'transform, opacity, text-shadow',
-      transformOrigin: 'center center',
-    })
-
-    gsap.to(outgoingText, {
-      opacity: 0.42,
-      x: () => gsap.utils.random(-2, 2, 1),
-      y: () => gsap.utils.random(-1, 1, 1),
-      textShadow: '1px 0 rgba(255,92,92,0.45), -1px 0 rgba(255,255,255,0.22)',
-      duration: 0.08,
-      ease: 'steps(1)',
-      stagger: { each: 0.0015, from: 'start' },
-      onComplete() {
-        commitLanguage()
-        requestAnimationFrame(() => {
-          const incomingText = getTextNodes()
-          gsap.killTweensOf(incomingText)
-          if (!incomingText.length) {
-            gsap.set(outgoingText, { clearProps: 'opacity,transform,textShadow,willChange,transformOrigin' })
-            finish()
-            return
-          }
-
-          const scrambleTargets = pickScrambleTargets(incomingText)
-          const scrambleSet = new Set(scrambleTargets)
-          const passiveTargets = incomingText.filter((el) => !scrambleSet.has(el))
-
-          gsap.set(incomingText, {
-            willChange: 'transform, opacity, text-shadow',
-            transformOrigin: 'center center',
-          })
-
-          if (scrambleTargets.length) {
-            gsap.set(scrambleTargets, {
-              opacity: 0.82,
-              x: () => gsap.utils.random(-2, 2, 1),
-              y: () => gsap.utils.random(-1, 1, 1),
-              textShadow: '1px 0 rgba(255,92,92,0.5), -1px 0 rgba(255,255,255,0.18)',
-            })
-          }
-
-          if (passiveTargets.length) {
-            gsap.fromTo(
-              passiveTargets,
-              { opacity: 0.55, y: 2 },
-              { opacity: 1, y: 0, duration: 0.22, ease: 'power2.out' }
-            )
-          }
-
-          if (!scrambleTargets.length) {
-            gsap.to(incomingText, {
-              opacity: 1,
-              x: 0,
-              y: 0,
-              textShadow: '0px 0 rgba(255,92,92,0)',
-              duration: 0.22,
-              ease: 'power2.out',
-              onComplete() {
-                gsap.set(incomingText, { clearProps: 'opacity,transform,textShadow,willChange,transformOrigin' })
-                finish()
-              },
-            })
-            return
-          }
-
-          scrambleTextElements(scrambleTargets, () => {
-            gsap.to(incomingText, {
-              opacity: 1,
-              x: 0,
-              y: 0,
-              textShadow: '0px 0 rgba(255,92,92,0)',
-              duration: 0.16,
-              ease: 'power2.out',
-              onComplete() {
-                gsap.set(incomingText, { clearProps: 'opacity,transform,textShadow,willChange,transformOrigin' })
-                finish()
-              },
-            })
-          })
-        })
-      },
-    })
   }, [lang, lenis])
 
   const content = useMemo(
