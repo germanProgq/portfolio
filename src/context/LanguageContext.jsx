@@ -1,155 +1,263 @@
 import { createContext, useContext, useState, useRef, useCallback, useEffect, useMemo } from 'react'
+import { flushSync } from 'react-dom'
 import { gsap } from 'gsap'
+import { ScrollTrigger } from 'gsap/ScrollTrigger'
+import { useLenis } from 'lenis/react'
 import { contentEn, contentRu } from '../data/content'
+import { navScrolling } from '../utils/navScrolling'
+import { captureScrollPosition, resolveScrollY, saveScrollPosition } from '../utils/scrollMemory'
 
 const LanguageContext = createContext(null)
 
 const TEXT_SELECTOR = '[data-i18n]'
+const LANGUAGE_STORAGE_KEY = 'portfolio:language'
+const SCRAMBLE_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#$%&+-/<>'
+const GLITCH_TEXT_SELECTOR = '.hero-name, .project-title, h1, h2, h3, .nav-item-btn, .nav-overlay button'
+const MAX_ANIMATED_TEXT_NODES = 44
+const MAX_SCRAMBLE_TARGETS = 7
+const TEXT_NODE = 3
+
+function getInitialLanguage() {
+  if (typeof window === 'undefined') return 'en'
+  try {
+    const stored = window.localStorage.getItem(LANGUAGE_STORAGE_KEY)
+    return stored === 'ru' || stored === 'en' ? stored : 'en'
+  } catch {
+    return 'en'
+  }
+}
 
 function getTextNodes() {
   return gsap.utils
     .toArray(TEXT_SELECTOR)
     .filter((el) => {
+      if (el.matches('[data-word]')) return false
       if (!el.isConnected || el.getClientRects().length === 0) return false
       const rect = el.getBoundingClientRect()
       return rect.bottom > -80 && rect.top < window.innerHeight + 80
     })
+    .slice(0, MAX_ANIMATED_TEXT_NODES)
+}
+
+function canScrambleText(el) {
+  return el.childNodes.length === 1 && el.firstChild?.nodeType === TEXT_NODE
+}
+
+function pickScrambleTargets(elements) {
+  const candidates = elements
+    .filter((el) => canScrambleText(el) && el.textContent.trim().length > 0)
+    .filter((el) => el.textContent.length <= 80)
+    .filter((el) => el.matches(GLITCH_TEXT_SELECTOR) || el.closest('nav'))
+
+  return candidates
+    .sort((a, b) => {
+      const aHero = a.classList.contains('hero-name') ? 0 : 1
+      const bHero = b.classList.contains('hero-name') ? 0 : 1
+      if (aHero !== bHero) return aHero - bHero
+      return a.getBoundingClientRect().top - b.getBoundingClientRect().top
+    })
+    .slice(0, MAX_SCRAMBLE_TARGETS)
+}
+
+function randomScrambleChar(index, frame) {
+  const seed = Math.sin((index + 1) * 91.13 + frame * 17.71) * 10000
+  const charIndex = Math.abs(Math.floor(seed)) % SCRAMBLE_CHARS.length
+  return SCRAMBLE_CHARS[charIndex]
+}
+
+function buildScrambledText(text, progress, frame) {
+  const chars = Array.from(text)
+  const revealCount = Math.floor(chars.length * progress)
+
+  return chars
+    .map((char, index) => {
+      if (char.trim() === '') return char
+      if (index < revealCount) return char
+      return randomScrambleChar(index, frame)
+    })
+    .join('')
+}
+
+function scrambleTextElements(elements, onComplete) {
+  const targets = elements
+    .filter(canScrambleText)
+    .map((el) => ({ el, text: el.textContent || '' }))
+    .filter(({ text }) => text.length > 0)
+
+  if (!targets.length) {
+    onComplete()
+    return
+  }
+
+  let frame = 0
+  const state = { progress: 0 }
+
+  gsap.to(state, {
+    progress: 1,
+    duration: 0.42,
+    ease: 'power1.out',
+    onUpdate() {
+      frame += 1
+      targets.forEach(({ el, text }) => {
+        el.textContent = buildScrambledText(text, state.progress, frame)
+      })
+    },
+    onComplete() {
+      targets.forEach(({ el, text }) => {
+        el.textContent = text
+      })
+      onComplete()
+    },
+  })
 }
 
 export function LanguageProvider({ children }) {
-  const [lang, setLang] = useState('en')
-  const [transitionLabel, setTransitionLabel] = useState('RU')
-
-  const overlayRef  = useRef(null)
-  const scanRef     = useRef(null)
-  const wakeRef     = useRef(null)
-  const flashRef    = useRef(null)
-  const bar0Ref     = useRef(null)
-  const bar1Ref     = useRef(null)
-  const bar2Ref     = useRef(null)
-  const codeRef     = useRef(null)
-  const gridRef     = useRef(null)
+  const [lang, setLang] = useState(getInitialLanguage)
   const busyRef     = useRef(false)
+  const lenis = useLenis()
 
   useEffect(() => {
     document.documentElement.lang = lang
+    try {
+      window.localStorage.setItem(LANGUAGE_STORAGE_KEY, lang)
+    } catch {
+      /* storage can be unavailable in private or restricted contexts */
+    }
   }, [lang])
 
   const switchLanguage = useCallback((targetLang) => {
     if (busyRef.current || targetLang === lang) return
     busyRef.current = true
 
-    const overlay = overlayRef.current
-    const scan    = scanRef.current
-    const wake    = wakeRef.current
-    const flash   = flashRef.current
-    const code    = codeRef.current
-    const grid    = gridRef.current
-    const bars    = [bar0Ref.current, bar1Ref.current, bar2Ref.current]
+    const preservedPosition = captureScrollPosition()
     const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 
-    if (!overlay || reduceMotion) {
-      setLang(targetLang)
-      busyRef.current = false
+    const restorePreservedPosition = () => {
+      ScrollTrigger.refresh()
+      const targetY = resolveScrollY(preservedPosition)
+
+      navScrolling.active = true
+      if (lenis) {
+        lenis.scrollTo(targetY, { immediate: true, force: true })
+      } else {
+        window.scrollTo(0, targetY)
+      }
+    }
+
+    const commitLanguage = () => {
+      navScrolling.active = true
+      flushSync(() => setLang(targetLang))
+      restorePreservedPosition()
+    }
+
+    const finish = () => {
+      requestAnimationFrame(() => {
+        ScrollTrigger.refresh()
+        navScrolling.active = false
+        saveScrollPosition()
+        busyRef.current = false
+      })
+    }
+
+    if (reduceMotion) {
+      commitLanguage()
+      finish()
       return
     }
 
-    setTransitionLabel(targetLang.toUpperCase())
-    if (code) code.textContent = targetLang.toUpperCase()
-
-    const vh = window.innerHeight
     const outgoingText = getTextNodes()
-    const tl = gsap.timeline({
+    gsap.killTweensOf(outgoingText)
+
+    if (!outgoingText.length) {
+      commitLanguage()
+      finish()
+      return
+    }
+
+    gsap.set(outgoingText, {
+      willChange: 'transform, opacity, text-shadow',
+      transformOrigin: 'center center',
+    })
+
+    gsap.to(outgoingText, {
+      opacity: 0.42,
+      x: () => gsap.utils.random(-2, 2, 1),
+      y: () => gsap.utils.random(-1, 1, 1),
+      textShadow: '1px 0 rgba(255,92,92,0.45), -1px 0 rgba(255,255,255,0.22)',
+      duration: 0.08,
+      ease: 'steps(1)',
+      stagger: { each: 0.0015, from: 'start' },
       onComplete() {
-        gsap.set(overlay, { display: 'none' })
-        gsap.set(getTextNodes(), { clearProps: 'opacity,transform,filter,willChange' })
-        busyRef.current = false
-      },
-    })
-
-    /* ── initial states ── */
-    gsap.set(overlay,  { display: 'block', opacity: 0 })
-    gsap.set(scan,     { y: 0,  opacity: 1 })
-    gsap.set(wake,     { y: -120, opacity: 0.55 })
-    gsap.set(flash,    { opacity: 0 })
-    gsap.set(code,     { xPercent: -50, yPercent: -50, opacity: 0, y: 18, scale: 0.98 })
-    gsap.set(grid,     { opacity: 0, scale: 1.04 })
-    gsap.set(outgoingText, { willChange: 'transform, opacity, filter' })
-    bars.forEach((bar, i) => {
-      if (!bar) return
-      const topPct = 18 + i * 27
-      gsap.set(bar, {
-        top: `${topPct}%`, opacity: 0, scaleX: 0,
-        transformOrigin: i % 2 === 0 ? 'left center' : 'right center',
-      })
-    })
-
-    tl
-      /* 1. Overlay slams in */
-      .to(overlay, { opacity: 1, duration: 0.11, ease: 'power4.in' })
-
-      /* 2. Scan line + wake sweep top → bottom */
-      .to([scan, wake], {
-        y: vh + 130,
-        duration: 0.46,
-        ease: 'power2.inOut',
-      }, 0.09)
-      .to(grid, { opacity: 0.28, scale: 1, duration: 0.2, ease: 'power2.out' }, 0.06)
-      .to(code, {
-        opacity: 0.9,
-        y: 0,
-        scale: 1,
-        duration: 0.18,
-        ease: 'power3.out',
-      }, 0.11)
-      .to(outgoingText, {
-        opacity: 0.08,
-        y: -12,
-        filter: 'blur(8px)',
-        duration: 0.18,
-        ease: 'power3.in',
-        stagger: { each: 0.004, from: 'random' },
-      }, 0.12)
-
-      /* 3. Glitch bars flash at staggered points during sweep */
-      .to(bars[0], { opacity: 0.55, scaleX: 1, duration: 0.07 }, 0.14)
-      .to(bars[0], { opacity: 0,   duration: 0.11 }, 0.22)
-      .to(bars[1], { opacity: 0.38, scaleX: 1, duration: 0.06 }, 0.25)
-      .to(bars[1], { opacity: 0,   duration: 0.10 }, 0.32)
-      .to(bars[2], { opacity: 0.48, scaleX: 1, duration: 0.07 }, 0.37)
-      .to(bars[2], { opacity: 0,   duration: 0.09 }, 0.45)
-
-      /* 4. Language flips mid-sweep */
-      .call(() => {
-        setLang(targetLang)
+        commitLanguage()
         requestAnimationFrame(() => {
           const incomingText = getTextNodes()
-          gsap.set(incomingText, { willChange: 'transform, opacity, filter' })
-          gsap.fromTo(
-            incomingText,
-            { opacity: 0, y: 18, filter: 'blur(12px)' },
-            {
+          gsap.killTweensOf(incomingText)
+          if (!incomingText.length) {
+            gsap.set(outgoingText, { clearProps: 'opacity,transform,textShadow,willChange,transformOrigin' })
+            finish()
+            return
+          }
+
+          const scrambleTargets = pickScrambleTargets(incomingText)
+          const scrambleSet = new Set(scrambleTargets)
+          const passiveTargets = incomingText.filter((el) => !scrambleSet.has(el))
+
+          gsap.set(incomingText, {
+            willChange: 'transform, opacity, text-shadow',
+            transformOrigin: 'center center',
+          })
+
+          if (scrambleTargets.length) {
+            gsap.set(scrambleTargets, {
+              opacity: 0.82,
+              x: () => gsap.utils.random(-2, 2, 1),
+              y: () => gsap.utils.random(-1, 1, 1),
+              textShadow: '1px 0 rgba(255,92,92,0.5), -1px 0 rgba(255,255,255,0.18)',
+            })
+          }
+
+          if (passiveTargets.length) {
+            gsap.fromTo(
+              passiveTargets,
+              { opacity: 0.55, y: 2 },
+              { opacity: 1, y: 0, duration: 0.22, ease: 'power2.out' }
+            )
+          }
+
+          if (!scrambleTargets.length) {
+            gsap.to(incomingText, {
               opacity: 1,
+              x: 0,
               y: 0,
-              filter: 'blur(0px)',
-              duration: 0.52,
-              ease: 'expo.out',
-              stagger: { each: 0.006, from: 'random' },
-              onComplete: () => gsap.set(incomingText, { clearProps: 'opacity,transform,filter,willChange' }),
-            }
-          )
+              textShadow: '0px 0 rgba(255,92,92,0)',
+              duration: 0.22,
+              ease: 'power2.out',
+              onComplete() {
+                gsap.set(incomingText, { clearProps: 'opacity,transform,textShadow,willChange,transformOrigin' })
+                finish()
+              },
+            })
+            return
+          }
+
+          scrambleTextElements(scrambleTargets, () => {
+            gsap.to(incomingText, {
+              opacity: 1,
+              x: 0,
+              y: 0,
+              textShadow: '0px 0 rgba(255,92,92,0)',
+              duration: 0.16,
+              ease: 'power2.out',
+              onComplete() {
+                gsap.set(incomingText, { clearProps: 'opacity,transform,textShadow,willChange,transformOrigin' })
+                finish()
+              },
+            })
+          })
         })
-      }, [], 0.27)
-
-      /* 5. Brief white flare at the pivot point */
-      .to(flash, { opacity: 0.07, duration: 0.05 }, 0.28)
-      .to(flash, { opacity: 0,   duration: 0.16 }, 0.34)
-      .to(code, { opacity: 0, y: -12, duration: 0.2, ease: 'power2.in' }, 0.38)
-      .to(grid, { opacity: 0, scale: 0.98, duration: 0.22, ease: 'power2.in' }, 0.42)
-
-      /* 6. Overlay dissolves out */
-      .to(overlay, { opacity: 0, duration: 0.24, ease: 'power3.out' }, 0.52)
-  }, [lang])
+      },
+    })
+  }, [lang, lenis])
 
   const content = useMemo(
     () => (lang === 'ru' ? contentRu : contentEn),
@@ -159,92 +267,6 @@ export function LanguageProvider({ children }) {
   return (
     <LanguageContext.Provider value={{ lang, switchLanguage, content }}>
       {children}
-
-      {/* ── Cinematic transition overlay ── */}
-      <div
-        ref={overlayRef}
-        aria-hidden="true"
-        style={{
-          position: 'fixed', inset: 0, zIndex: 99999,
-          display: 'none', overflow: 'hidden',
-          background: '#080808', pointerEvents: 'none',
-        }}
-      >
-        <div ref={gridRef} style={{
-          position: 'absolute',
-          inset: '-12%',
-          backgroundImage: [
-            'linear-gradient(rgba(255,92,92,0.15) 1px, transparent 1px)',
-            'linear-gradient(90deg, rgba(255,92,92,0.12) 1px, transparent 1px)',
-            'radial-gradient(circle at 50% 50%, rgba(255,92,92,0.18), transparent 42%)',
-          ].join(','),
-          backgroundSize: '52px 52px, 52px 52px, 100% 100%',
-          transformOrigin: 'center',
-          opacity: 0,
-          pointerEvents: 'none',
-        }} />
-
-        {/* CRT scanlines texture */}
-        <div style={{
-          position: 'absolute', inset: 0, pointerEvents: 'none',
-          backgroundImage: 'repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(255,255,255,0.014) 2px,rgba(255,255,255,0.014) 4px)',
-        }} />
-
-        {/* Glitch artifact bars */}
-        {[bar0Ref, bar1Ref, bar2Ref].map((ref, i) => (
-          <div key={i} ref={ref} style={{
-            position: 'absolute', left: 0, right: 0,
-            height: `${3 + i * 2}px`,
-            background: i === 1
-              ? 'rgba(255,92,92,0.7)'
-              : 'rgba(255,255,255,0.55)',
-          }} />
-        ))}
-
-        {/* Glow wake (trails below the scan line) */}
-        <div ref={wakeRef} style={{
-          position: 'absolute', left: 0, right: 0,
-          top: 0, height: '120px',
-          background: 'linear-gradient(to bottom, rgba(255,92,92,0.18) 0%, transparent 100%)',
-          pointerEvents: 'none',
-        }} />
-
-        {/* Main scan line */}
-        <div ref={scanRef} style={{
-          position: 'absolute', left: 0, right: 0,
-          top: 0, height: '3px',
-          background: 'linear-gradient(90deg,transparent 0%,rgba(255,92,92,0.5) 12%,#ff5c5c 38%,#fff 50%,#ff5c5c 62%,rgba(255,92,92,0.5) 88%,transparent 100%)',
-          boxShadow: [
-            '0 0 0 1px rgba(255,92,92,0.25)',
-            '0 0 18px 5px rgba(255,92,92,0.6)',
-            '0 0 55px 14px rgba(255,92,92,0.22)',
-            '0 0 100px 28px rgba(255,92,92,0.08)',
-          ].join(','),
-          filter: 'blur(0.4px)',
-        }} />
-
-        <div ref={codeRef} style={{
-          position: 'absolute',
-          left: '50%',
-          top: '50%',
-          fontFamily: 'var(--font-mono)',
-          fontSize: 'clamp(44px, 12vw, 160px)',
-          fontWeight: 500,
-          letterSpacing: '0.18em',
-          color: 'rgba(255,255,255,0.92)',
-          textShadow: '0 0 24px rgba(255,92,92,0.9), 0 0 80px rgba(255,92,92,0.28)',
-          mixBlendMode: 'screen',
-          opacity: 0,
-        }}>
-          {transitionLabel}
-        </div>
-
-        {/* White flash at pivot */}
-        <div ref={flashRef} style={{
-          position: 'absolute', inset: 0,
-          background: '#fff', opacity: 0, pointerEvents: 'none',
-        }} />
-      </div>
     </LanguageContext.Provider>
   )
 }

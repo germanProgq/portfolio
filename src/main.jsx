@@ -10,6 +10,10 @@ import App from './App'
 gsap.registerPlugin(ScrollTrigger)
 gsap.ticker.lagSmoothing(0)
 
+if ('scrollRestoration' in window.history) {
+  window.history.scrollRestoration = 'manual'
+}
+
 function Root() {
   return (
     <ReactLenis
