@@ -346,7 +346,7 @@ const navCSS = `
   .language-toggle:hover { border-color: var(--accent) !important; }
   .social-icon-link svg,
   .download-icon-link svg { display: block; width: 20px; height: 20px; }
-  .nav-logo:hover        { color: var(--accent) !important; }
+  .nav-logo:hover        { opacity: 0.75; }
 
   .nav-shell .nav-desktop-items,
   .nav-shell .nav-desktop-socials {
@@ -379,7 +379,7 @@ const styles = {
   },
   logo: {
     fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '15px',
-    color: 'var(--fg)', letterSpacing: '0.05em', transition: 'color 0.2s', cursor: 'none',
+    color: 'var(--accent)', letterSpacing: '0.05em', cursor: 'none', flexShrink: 0,
   },
   items: { gap: '2.5rem', position: 'absolute', left: '50%', transform: 'translateX(-50%)', display: 'none' },
   item: { fontFamily: 'var(--font-mono)', fontSize: '13px', letterSpacing: '0.1em', transition: 'color 0.2s', cursor: 'none' },
