@@ -10,6 +10,8 @@ const contact = {
   linkedinUrl: 'https://linkedin.com/in/german-vinokurov-300b26320',
 }
 
+const publicAsset = (path) => `${import.meta.env.BASE_URL}${path}`
+
 const contactRu = {
   ...contact,
   location: 'Израиль',
@@ -141,7 +143,7 @@ export const contentEn = {
       { label: 'CONTACT', id: 'contact' },
     ],
     downloadCV: 'Download CV',
-    cvFile: '/CV_Eng.pdf',
+    cvFile: publicAsset('CV_Eng.pdf'),
     cvFilename: 'German_Vinokurov_CV_EN.pdf',
     scrollHint: 'scroll ↓',
     projectLinks: {
@@ -285,7 +287,7 @@ export const contentRu = {
       { label: 'КОНТАКТ', id: 'contact' },
     ],
     downloadCV: 'Скачать резюме',
-    cvFile: '/CV_Rus.pdf',
+    cvFile: publicAsset('CV_Rus.pdf'),
     cvFilename: 'German_Vinokurov_CV_RU.pdf',
     scrollHint: 'скролл ↓',
     projectLinks: {

@@ -81,19 +81,27 @@ export default function Nav({ visible }) {
   useEffect(() => {
     const el = overlayRef.current
     if (!el) return
-    gsap.killTweensOf(el)
+    const items = el.querySelectorAll('[data-ol]')
+    gsap.killTweensOf([el, ...items])
+
     if (menuOpen) {
       lenis?.stop()
-      gsap.set(el, { display: 'flex' })
-      gsap.fromTo(el, { opacity: 0, y: -24 }, { opacity: 1, y: 0, duration: 0.35, ease: 'power3.out' })
+      gsap.set(el, { display: 'flex', y: '100%' })
+      gsap.set(items, { y: 28, opacity: 0 })
+
+      const tl = gsap.timeline()
+      tl.to(el,    { y: 0, duration: 0.42, ease: 'power3.out' })
+      tl.to(items, { y: 0, opacity: 1, duration: 0.26, stagger: 0.07, ease: 'power3.out' }, '-=0.18')
     } else {
       lenis?.start()
-      gsap.to(el, {
-        opacity: 0, y: -16, duration: 0.25, ease: 'power2.in',
+      const tl = gsap.timeline({
         onComplete: () => gsap.set(el, { display: 'none', y: 0 }),
       })
+      tl.to(items, { opacity: 0, duration: 0.14, stagger: 0.03, ease: 'none' }, 0)
+      tl.to(el,    { y: '100%', duration: 0.32, ease: 'power2.in' }, 0.08)
     }
-    return () => gsap.killTweensOf(el)
+
+    return () => gsap.killTweensOf([el, ...items])
   }, [menuOpen, lenis])
 
   const scrollTo = (id) => {
@@ -277,19 +285,33 @@ export default function Nav({ visible }) {
           </button>
         </div>
 
-        <button
-          onClick={() => setMenuOpen(!menuOpen)}
-          style={styles.hamburger}
-          className="nav-hamburger"
-          aria-label={menuOpen ? 'Close menu' : 'Open menu'}
-          aria-expanded={menuOpen}
-          aria-controls="mobile-navigation"
-          data-cursor
-        >
-          <span style={{ ...styles.bar, transform: menuOpen ? 'rotate(45deg) translate(3px, 3px)' : 'none' }} />
-          <span style={{ ...styles.bar, opacity: menuOpen ? 0 : 1, transform: menuOpen ? 'scaleX(0)' : 'none' }} />
-          <span style={{ ...styles.bar, transform: menuOpen ? 'rotate(-45deg) translate(3px, -3px)' : 'none' }} />
-        </button>
+        <div style={styles.compactGroup}>
+          <button
+            type="button"
+            onClick={handleLangToggle}
+            style={styles.languageToggle}
+            className="language-toggle nav-compact-lang"
+            aria-label="Language selector"
+            data-cursor
+          >
+            <span aria-hidden="true" style={{ ...styles.languageThumb, transform: lang === 'ru' ? 'translateX(38px)' : 'translateX(0)' }} />
+            <span style={{ ...styles.languageOption, color: lang === 'en' ? 'var(--bg)' : 'var(--muted)' }}>EN</span>
+            <span style={{ ...styles.languageOption, color: lang === 'ru' ? 'var(--bg)' : 'var(--muted)' }}>RU</span>
+          </button>
+          <button
+            onClick={() => setMenuOpen(!menuOpen)}
+            style={styles.hamburger}
+            className="nav-hamburger"
+            aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+            aria-expanded={menuOpen}
+            aria-controls="mobile-navigation"
+            data-cursor
+          >
+            <span style={{ ...styles.bar, transform: menuOpen ? 'rotate(45deg) translate(3px, 3px)' : 'none' }} />
+            <span style={{ ...styles.bar, opacity: menuOpen ? 0 : 1, transform: menuOpen ? 'scaleX(0)' : 'none' }} />
+            <span style={{ ...styles.bar, transform: menuOpen ? 'rotate(-45deg) translate(3px, -3px)' : 'none' }} />
+          </button>
+        </div>
       </nav>
 
       <div
@@ -301,12 +323,12 @@ export default function Nav({ visible }) {
       >
         <div style={styles.overlayItems}>
           {NAV_ITEMS.map(({ label, id }) => (
-            <button key={id} onClick={() => scrollTo(id)} style={styles.overlayItem} data-cursor data-i18n>
+            <button key={id} data-ol onClick={() => scrollTo(id)} style={styles.overlayItem} data-cursor data-i18n>
               {label}
             </button>
           ))}
         </div>
-        <div style={styles.overlaySocials}>
+        <div data-ol style={styles.overlaySocials}>
           {SOCIALS.map(({ Icon, title, href }) => (
             <a key={title} href={href} title={title} aria-label={title}
               target="_blank" rel="noopener noreferrer"
@@ -315,18 +337,7 @@ export default function Nav({ visible }) {
             </a>
           ))}
         </div>
-        <button
-          type="button"
-          onClick={handleLangToggle}
-          style={{ ...styles.languageToggle, marginTop: '2.5rem', marginLeft: 0 }}
-          className="language-toggle"
-          data-cursor
-        >
-          <span aria-hidden="true" style={{ ...styles.languageThumb, transform: lang === 'ru' ? 'translateX(38px)' : 'translateX(0)' }} />
-          <span style={{ ...styles.languageOption, color: lang === 'en' ? 'var(--bg)' : 'var(--muted)' }}>EN</span>
-          <span style={{ ...styles.languageOption, color: lang === 'ru' ? 'var(--bg)' : 'var(--muted)' }}>RU</span>
-        </button>
-        <a href={ui.cvFile} download={ui.cvFilename} style={styles.overlayCV} className="overlay-cv-btn" data-cursor data-i18n>
+        <a data-ol href={ui.cvFile} download={ui.cvFilename} style={styles.overlayCV} className="overlay-cv-btn" data-cursor data-i18n>
           <DownloadIcon />
           <span>{ui.downloadCV}</span>
         </a>
@@ -364,6 +375,8 @@ const navCSS = `
   }
   .nav-shell .nav-hamburger { display: none !important; }
   .nav-shell.nav--compact .nav-hamburger { display: flex !important; }
+  .nav-compact-lang { display: none !important; }
+  .nav--compact .nav-compact-lang { display: grid !important; }
   .nav-overlay:not(.nav-overlay--compact) { display: none !important; }
   .nav-overlay .overlay-social-link svg { width: 100%; height: 100%; }
   .nav-overlay .overlay-social-link:hover { color: var(--accent) !important; }
@@ -413,6 +426,7 @@ const styles = {
     fontFamily: 'var(--font-mono)', fontSize: '11px', letterSpacing: '0.08em', lineHeight: 1,
     transition: 'color 0.22s ease',
   },
+  compactGroup: { display: 'flex', alignItems: 'center', gap: '0.75rem' },
   hamburger: { display: 'none', flexDirection: 'column', gap: '4px', padding: '4px', cursor: 'none' },
   bar: {
     width: '20px', height: '1px', background: 'var(--fg)', display: 'block',
