@@ -95,7 +95,7 @@ export default function Contact() {
 
   return (
     <section id="contact" ref={sectionRef} style={styles.section}>
-      <WireframeGlobe />
+      <WireframeGlobe triggerRef={sectionRef} />
 
       <h2 ref={quoteRef} style={{ ...styles.quoteWrap, position: 'relative', zIndex: 1 }}>
         {quoteWords.map((word, i) => (
