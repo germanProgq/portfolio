@@ -13,8 +13,10 @@ export default function Hero({ active = false }) {
   const socialsRef = useRef(null)
   const [roleIndex, setRoleIndex] = useState(0)
   const [roleVisible, setRoleVisible] = useState(true)
-  const { content } = useLanguage()
+  const { content, lang } = useLanguage()
   const { person, ui } = content
+  const nameStyle = lang === 'ru' ? { ...styles.name, ...styles.nameRu } : styles.name
+  const roleRowStyle = lang === 'ru' ? { ...styles.roleRow, ...styles.roleRowRu } : styles.roleRow
   const socials = [
     { label: 'GitHub', href: person.contact.githubUrl },
     { label: 'Twitter', href: person.contact.twitterUrl },
@@ -106,11 +108,11 @@ export default function Hero({ active = false }) {
   return (
     <section id="hero" ref={sectionRef} style={styles.section}>
       <div style={styles.inner}>
-        <h1 ref={nameRef} style={styles.name} className="hero-name" aria-label={person.name} data-i18n>
+        <h1 ref={nameRef} style={nameStyle} className="hero-name" aria-label={person.name} data-i18n>
           {person.name}
         </h1>
         <div ref={lineRef} style={styles.line} />
-        <div style={styles.roleRow} className="hero-role-row">
+        <div style={roleRowStyle} className="hero-role-row">
           <div ref={roleRef} style={styles.roleWrap} className="hero-role-text">
             <span style={{
               ...styles.role,
@@ -246,6 +248,10 @@ const styles = {
     overflow: 'hidden',
     textOverflow: 'ellipsis',
   },
+  nameRu: {
+    fontSize: 'clamp(34px, 7.2vw, 124px)',
+    textAlign: 'center',
+  },
   line: {
     width: '100%',
     height: '1px',
@@ -256,6 +262,10 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     gap: '1rem',
+  },
+  roleRowRu: {
+    justifyContent: 'center',
+    textAlign: 'center',
   },
   roleWrap: {
     overflow: 'hidden',

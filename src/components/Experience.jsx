@@ -21,6 +21,7 @@ const PROJECTS_LAUNCH_DURATION = 0.62
 const IMPACT_DELAY = 0.1
 const IMPACT_PEAK = 0.28
 const REPEAT_LAUNCH_DELAY = 0.11
+const SCROLL_DRAIN_QUIET_MS = 220
 const canvasContexts = new WeakMap()
 const scrollLockEventOptions = { capture: true, passive: false }
 const scrollLockKeys = new Set([
@@ -415,6 +416,9 @@ export default function Experience() {
     const impactArmed = { current: false }
     let pendingImpactCall = null
     let scrollLocked = false
+    let releaseAfterDrain = false
+    let scrollDrainTimer = null
+    let lastBlockedInputAt = 0
     let lastScrollY = window.scrollY
     let scrollDirection = 0
 
@@ -426,30 +430,78 @@ export default function Experience() {
       }
     }
 
-    const preventUserScroll = (event) => {
-      event.preventDefault()
+    const clearScrollDrainTimer = () => {
+      if (!scrollDrainTimer) return
+      window.clearTimeout(scrollDrainTimer)
+      scrollDrainTimer = null
     }
 
-    const preventScrollKey = (event) => {
-      if (scrollLockKeys.has(event.key)) event.preventDefault()
+    const finishUnlockUserScroll = () => {
+      clearScrollDrainTimer()
+      scrollLocked = false
+      releaseAfterDrain = false
+      window.removeEventListener('wheel', preventUserScroll, scrollLockEventOptions)
+      window.removeEventListener('touchmove', preventUserScroll, scrollLockEventOptions)
+      window.removeEventListener('keydown', preventScrollKey, true)
+      const lenis = lenisRef.current
+      if (lenis) {
+        lenis.scrollTo(window.scrollY, { immediate: true, force: true })
+        lenis.start()
+      }
+    }
+
+    const scheduleDrainRelease = () => {
+      clearScrollDrainTimer()
+      scrollDrainTimer = window.setTimeout(() => {
+        const quietFor = performance.now() - lastBlockedInputAt
+        if (quietFor >= SCROLL_DRAIN_QUIET_MS) {
+          finishUnlockUserScroll()
+          return
+        }
+        scheduleDrainRelease()
+      }, SCROLL_DRAIN_QUIET_MS)
+    }
+
+    function preventUserScroll(event) {
+      lastBlockedInputAt = performance.now()
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      if (releaseAfterDrain) scheduleDrainRelease()
+    }
+
+    function preventScrollKey(event) {
+      if (!scrollLockKeys.has(event.key)) return
+      lastBlockedInputAt = performance.now()
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      if (releaseAfterDrain) scheduleDrainRelease()
     }
 
     const lockUserScroll = () => {
       if (scrollLocked) return
       scrollLocked = true
-      lenisRef.current?.stop()
+      releaseAfterDrain = false
+      clearScrollDrainTimer()
+      lastBlockedInputAt = performance.now()
+      const lenis = lenisRef.current
+      if (lenis) {
+        lenis.scrollTo(window.scrollY, { immediate: true, force: true })
+        lenis.stop()
+      }
       window.addEventListener('wheel', preventUserScroll, scrollLockEventOptions)
       window.addEventListener('touchmove', preventUserScroll, scrollLockEventOptions)
       window.addEventListener('keydown', preventScrollKey, true)
     }
 
-    const unlockUserScroll = () => {
+    const unlockUserScroll = ({ drain = false } = {}) => {
       if (!scrollLocked) return
-      scrollLocked = false
-      window.removeEventListener('wheel', preventUserScroll, scrollLockEventOptions)
-      window.removeEventListener('touchmove', preventUserScroll, scrollLockEventOptions)
-      window.removeEventListener('keydown', preventScrollKey, true)
-      lenisRef.current?.start()
+      if (!drain) {
+        finishUnlockUserScroll()
+        return
+      }
+
+      releaseAfterDrain = true
+      scheduleDrainRelease()
     }
 
     const launchToProjects = () => {
@@ -473,7 +525,7 @@ export default function Experience() {
           lock: true,
           onComplete: () => {
             navScrolling.active = false
-            unlockUserScroll()
+            unlockUserScroll({ drain: true })
             ScrollTrigger.refresh()
           },
         })
@@ -483,7 +535,7 @@ export default function Experience() {
       window.scrollTo({ top: targetY, behavior: 'smooth' })
       window.setTimeout(() => {
         navScrolling.active = false
-        unlockUserScroll()
+        unlockUserScroll({ drain: true })
         ScrollTrigger.refresh()
       }, PROJECTS_LAUNCH_DURATION * 1000 + 120)
     }
